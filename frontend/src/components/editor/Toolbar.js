@@ -164,7 +164,7 @@ export const Toolbar = ({ onSave, onExport }) => {
                   onClick={() => setExportFormat(format.value)}
                   className={`p-4 rounded-lg border cursor-pointer transition-all ${
                     exportFormat === format.value
-                      ? 'border-primary bg-primary/10 shadow-[0_0_15px_-3px_rgba(163,230,53,0.3)]'
+                      ? 'border-primary bg-primary/10 shadow-[0_0_15px_-3px_rgba(148,78,253,0.3)]'
                       : 'border-border hover:border-primary/50'
                   }`}
                   data-testid={`export-format-${format.value}`}
@@ -174,6 +174,27 @@ export const Toolbar = ({ onSave, onExport }) => {
                 </div>
               ))}
             </div>
+            
+            {/* Separate handwriting checkbox - only show if handwriting exists */}
+            {hasHandwriting && (
+              <div className="flex items-center space-x-2 mt-4 p-3 rounded-lg bg-muted/50">
+                <Checkbox
+                  id="separate-handwriting"
+                  checked={separateHandwriting}
+                  onCheckedChange={setSeparateHandwriting}
+                  data-testid="separate-handwriting-checkbox"
+                />
+                <Label htmlFor="separate-handwriting" className="text-sm cursor-pointer">
+                  Export handwriting SVGs separately
+                </Label>
+              </div>
+            )}
+            {hasHandwriting && separateHandwriting && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Will export as ZIP: main export without handwriting + separate handwriting SVG files
+              </p>
+            )}
+            
             <Button
               onClick={handleExport}
               disabled={isExporting}
