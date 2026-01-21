@@ -29,7 +29,7 @@ const initialState = {
   },
   selectedElementIds: [],
   clipboard: null,
-  zoom: 1,
+  zoom: 0.5,
   pan: { x: 0, y: 0 },
   tool: 'select', // select, pan, text, rectangle, circle, line
   isDirty: false,
