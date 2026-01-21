@@ -15,6 +15,13 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 HANDWRITING_LIB_PATH = os.path.join(os.path.dirname(__file__), 'handwriting_lib')
 sys.path.insert(0, HANDWRITING_LIB_PATH)
 
+# Update config paths to use absolute paths
+import handwriting_synthesis.config as config
+config.BASE_PATH = os.path.join(HANDWRITING_LIB_PATH, "model")
+config.checkpoint_path = os.path.join(config.BASE_PATH, "checkpoint")
+config.prediction_path = os.path.join(config.BASE_PATH, "prediction")
+config.style_path = os.path.join(config.BASE_PATH, "style")
+
 # Lazy loading of the model to avoid slow startup
 _hand_instance = None
 
