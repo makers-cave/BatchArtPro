@@ -298,6 +298,7 @@ export const Canvas = ({ canvasRef }) => {
             data-testid="canvas"
           >
             {/* Elements */}
+            {console.log('Rendering elements:', sortedElements.length, sortedElements)}
             {sortedElements.map((element) => (
               <CanvasElement
                 key={element.id}
