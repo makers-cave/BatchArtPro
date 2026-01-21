@@ -30,6 +30,10 @@ export const Toolbar = ({ onSave, onExport }) => {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState('png');
   const [isExporting, setIsExporting] = useState(false);
+  const [separateHandwriting, setSeparateHandwriting] = useState(false);
+
+  // Check if template has any handwriting elements
+  const hasHandwriting = state.template.elements.some(el => el.type === 'handwriting' && el.content);
 
   const canUndo = state.historyIndex > 0;
   const canRedo = state.historyIndex < state.history.length - 1;
