@@ -241,6 +241,12 @@ export const Sidebar = () => {
               onClick={createTextElement}
               testId="add-text"
             />
+            <ToolButton
+              icon={PenTool}
+              label="Handwriting"
+              onClick={createHandwritingElement}
+              testId="add-handwriting"
+            />
           </SidebarSection>
 
           <Separator className="my-2" />
