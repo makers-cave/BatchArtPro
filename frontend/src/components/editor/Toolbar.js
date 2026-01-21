@@ -64,9 +64,8 @@ export const Toolbar = ({ onSave, onExport }) => {
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      await onExport?.(exportFormat);
+      await onExport?.(exportFormat, separateHandwriting);
       setExportDialogOpen(false);
-      toast.success(`Exported as ${exportFormat.toUpperCase()}`);
     } catch (error) {
       toast.error('Export failed');
     } finally {
