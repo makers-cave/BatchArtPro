@@ -73,6 +73,34 @@ export const Sidebar = () => {
     toast.success('Text element added');
   };
 
+  const createHandwritingElement = () => {
+    actions.addElement({
+      type: 'handwriting',
+      name: 'Handwriting',
+      x: 100,
+      y: 100,
+      width: 400,
+      height: 120,
+      content: '', // Will hold SVG content
+      style: {
+        fill: 'transparent',
+        stroke: 'transparent',
+        strokeWidth: 0,
+        opacity: 1,
+      },
+      extraProps: {
+        text: 'Hello World', // Original text
+        style: 9,
+        bias: 0.75,
+        strokeColor: '#000000',
+        strokeWidth: 2,
+        svgPaths: [], // Store path data for separate export
+      },
+    });
+    actions.setTool('select');
+    toast.success('Handwriting element added');
+  };
+
   const createShapeElement = (shapeType) => {
     const shapeConfig = {
       rectangle: { width: 150, height: 100 },
