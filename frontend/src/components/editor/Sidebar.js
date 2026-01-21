@@ -88,8 +88,8 @@ export const Sidebar = () => {
       y: 100,
       ...config,
       style: {
-        fill: shapeType === 'line' ? '#000000' : '#e0e0e0',
-        stroke: '#000000',
+        fill: shapeType === 'line' ? '#333333' : '#94a3b8',
+        stroke: '#1e293b',
         strokeWidth: shapeType === 'line' ? 0 : 2,
         opacity: 1,
       },
