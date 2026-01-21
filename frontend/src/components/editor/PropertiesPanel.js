@@ -168,6 +168,9 @@ export const PropertiesPanel = () => {
             {element.type === 'text' && (
               <TabsTrigger value="fonts" className="text-xs" data-testid="tab-fonts">Fonts</TabsTrigger>
             )}
+            {element.type === 'handwriting' && (
+              <TabsTrigger value="handwriting" className="text-xs" data-testid="tab-handwriting">Handwriting</TabsTrigger>
+            )}
             <TabsTrigger value="style" className="text-xs" data-testid="tab-style">Style</TabsTrigger>
             <TabsTrigger value="shadow" className="text-xs" data-testid="tab-shadow">Shadow</TabsTrigger>
           </TabsList>
