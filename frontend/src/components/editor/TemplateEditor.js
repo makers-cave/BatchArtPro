@@ -333,40 +333,116 @@ export const TemplateEditor = () => {
   };
 
   // Export template (single)
-  const handleExport = async (format) => {
+  const handleExport = async (format, separateHandwriting = false) => {
     try {
       const { width, height } = state.template.settings;
       
-      if (format === 'svg') {
-        const svgContent = generateSVGContent(state.template);
-        const blob = new Blob([svgContent], { type: 'image/svg+xml' });
-        downloadBlob(blob, `${state.template.name}.svg`);
-      } else if (format === 'pdf') {
-        const canvas = await renderTemplateToCanvas(state.template);
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF({
-          orientation: width > height ? 'landscape' : 'portrait',
-          unit: 'px',
-          format: [width, height]
-        });
-        pdf.addImage(imgData, 'PNG', 0, 0, width, height);
-        pdf.save(`${state.template.name}.pdf`);
-      } else {
-        // Use our custom renderer for PNG/JPEG - renders at full template size
-        const canvas = await renderTemplateToCanvas(state.template);
-        const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
-        canvas.toBlob((blob) => {
-          if (blob) {
-            downloadBlob(blob, `${state.template.name}.${format}`);
-          }
-        }, mimeType, 0.95);
-      }
+      // Check if we need to separate handwriting
+      const handwritingElements = state.template.elements.filter(
+        el => el.type === 'handwriting' && el.content
+      );
       
-      toast.success(`Exported as ${format.toUpperCase()}`);
+      if (separateHandwriting && handwritingElements.length > 0) {
+        // Export with separate handwriting
+        await exportWithSeparateHandwriting(format, handwritingElements);
+      } else {
+        // Normal export
+        if (format === 'svg') {
+          const svgContent = generateSVGContent(state.template);
+          const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+          downloadBlob(blob, `${state.template.name}.svg`);
+        } else if (format === 'pdf') {
+          const canvas = await renderTemplateToCanvas(state.template);
+          const imgData = canvas.toDataURL('image/png');
+          const pdf = new jsPDF({
+            orientation: width > height ? 'landscape' : 'portrait',
+            unit: 'px',
+            format: [width, height]
+          });
+          pdf.addImage(imgData, 'PNG', 0, 0, width, height);
+          pdf.save(`${state.template.name}.pdf`);
+        } else {
+          // Use our custom renderer for PNG/JPEG - renders at full template size
+          const canvas = await renderTemplateToCanvas(state.template);
+          const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+          canvas.toBlob((blob) => {
+            if (blob) {
+              downloadBlob(blob, `${state.template.name}.${format}`);
+            }
+          }, mimeType, 0.95);
+        }
+        
+        toast.success(`Exported as ${format.toUpperCase()}`);
+      }
     } catch (error) {
       console.error('Export error:', error);
       toast.error('Export failed: ' + error.message);
     }
+  };
+
+  // Export with separate handwriting SVGs
+  const exportWithSeparateHandwriting = async (format, handwritingElements) => {
+    const { width, height } = state.template.settings;
+    const zip = new JSZip();
+    
+    // Create template without handwriting for main export
+    const templateWithoutHandwriting = {
+      ...state.template,
+      elements: state.template.elements.map(el => 
+        el.type === 'handwriting' ? { ...el, visible: false } : el
+      )
+    };
+    
+    // Generate main export (without handwriting)
+    if (format === 'pdf') {
+      const canvas = await renderTemplateToCanvas(templateWithoutHandwriting);
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: width > height ? 'landscape' : 'portrait',
+        unit: 'px',
+        format: [width, height]
+      });
+      pdf.addImage(imgData, 'PNG', 0, 0, width, height);
+      const pdfBlob = pdf.output('blob');
+      zip.file(`${state.template.name}_main.pdf`, pdfBlob);
+    } else if (format === 'svg') {
+      const svgContent = generateSVGContent(templateWithoutHandwriting);
+      zip.file(`${state.template.name}_main.svg`, svgContent);
+    } else {
+      const canvas = await renderTemplateToCanvas(templateWithoutHandwriting);
+      const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, mimeType, 0.95));
+      zip.file(`${state.template.name}_main.${format}`, blob);
+    }
+    
+    // Generate separate handwriting SVGs
+    handwritingElements.forEach((el, index) => {
+      if (el.extraProps?.svgPaths && el.extraProps.svgPaths.length > 0) {
+        // Create SVG from stored paths
+        const svgWidth = el.extraProps.svgWidth || el.width;
+        const svgHeight = el.extraProps.svgHeight || el.height;
+        
+        let pathsContent = '';
+        el.extraProps.svgPaths.forEach(pathData => {
+          pathsContent += `<path d="${pathData.path}" stroke="${pathData.color}" stroke-width="${pathData.width}" stroke-linecap="round" fill="none"/>`;
+        });
+        
+        const handwritingSvg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgWidth} ${svgHeight}" width="${svgWidth}" height="${svgHeight}">
+  ${pathsContent}
+</svg>`;
+        
+        zip.file(`handwriting_${index + 1}_${el.name || 'element'}.svg`, handwritingSvg);
+      } else if (el.content) {
+        // Use the stored SVG content directly
+        zip.file(`handwriting_${index + 1}_${el.name || 'element'}.svg`, el.content);
+      }
+    });
+    
+    // Download ZIP
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    saveAs(zipBlob, `${state.template.name}_with_handwriting.zip`);
+    toast.success(`Exported as ZIP with ${handwritingElements.length} handwriting SVG(s)`);
   };
 
   // Batch export with data
