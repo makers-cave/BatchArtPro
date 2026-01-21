@@ -334,11 +334,6 @@ export const TemplateEditor = () => {
 
   // Export template (single)
   const handleExport = async (format) => {
-    if (!canvasRef.current) {
-      toast.error('Canvas not ready');
-      return;
-    }
-
     try {
       const { width, height } = state.template.settings;
       
@@ -357,21 +352,17 @@ export const TemplateEditor = () => {
         pdf.addImage(imgData, 'PNG', 0, 0, width, height);
         pdf.save(`${state.template.name}.pdf`);
       } else {
-        const html2canvas = (await import('html2canvas')).default;
-        const canvasImage = await html2canvas(canvasRef.current, {
-          width,
-          height,
-          scale: 2,
-          backgroundColor: state.template.settings.backgroundColor,
-        });
-        
+        // Use our custom renderer for PNG/JPEG - renders at full template size
+        const canvas = await renderTemplateToCanvas(state.template);
         const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
-        canvasImage.toBlob((blob) => {
+        canvas.toBlob((blob) => {
           if (blob) {
             downloadBlob(blob, `${state.template.name}.${format}`);
           }
         }, mimeType, 0.95);
       }
+      
+      toast.success(`Exported as ${format.toUpperCase()}`);
     } catch (error) {
       console.error('Export error:', error);
       toast.error('Export failed: ' + error.message);
