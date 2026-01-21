@@ -335,6 +335,35 @@ export const CanvasElement = ({
           </div>
         );
 
+      case 'handwriting':
+        return (
+          <div
+            className="w-full h-full flex items-center justify-center overflow-hidden"
+            style={{
+              ...elementStyle,
+              backgroundColor: style.fill !== 'transparent' ? style.fill : undefined,
+            }}
+          >
+            {content ? (
+              <div 
+                dangerouslySetInnerHTML={{ __html: content }}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                className="handwriting-svg-container"
+              />
+            ) : (
+              <div className="text-xs text-muted-foreground italic">
+                Click "Update Handwriting" to generate
+              </div>
+            )}
+          </div>
+        );
+
       default:
         return null;
     }
