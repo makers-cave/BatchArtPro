@@ -346,18 +346,21 @@ export const CanvasElement = ({
     }
   };
 
+  const wrapperStyle = {
+    position: 'absolute',
+    left: x * zoom,
+    top: y * zoom,
+    width: width * zoom,
+    height: height * zoom,
+    transform: `rotate(${rotation}deg)`,
+    transformOrigin: 'center center',
+    zIndex: element.zIndex + 10,
+  };
+
   return (
     <div
-      className={`absolute ${isSelected ? 'element-selected' : ''} ${!isSelected && 'hover:element-hover'}`}
-      style={{
-        left: x * zoom,
-        top: y * zoom,
-        width: width * zoom,
-        height: height * zoom,
-        transform: `rotate(${rotation}deg)`,
-        transformOrigin: 'center center',
-        zIndex: element.zIndex,
-      }}
+      className={`${isSelected ? 'element-selected' : ''} ${!isSelected ? 'hover:element-hover' : ''}`}
+      style={wrapperStyle}
       onMouseDown={(e) => {
         e.stopPropagation();
         if (!locked && !isEditing) {
@@ -368,10 +371,8 @@ export const CanvasElement = ({
       onDoubleClick={handleDoubleClick}
       data-testid={`canvas-element-${id}`}
     >
-      {/* The actual element */}
-      <div className="absolute inset-0">
-        {renderElement()}
-      </div>
+      {/* The actual element content */}
+      {renderElement()}
 
       {/* Selection handles */}
       {isSelected && !locked && (
