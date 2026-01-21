@@ -17,6 +17,7 @@ import {
   Unlock,
   GripVertical,
   Layers,
+  PenTool,
 } from 'lucide-react';
 
 const getElementIcon = (type) => {
@@ -29,6 +30,7 @@ const getElementIcon = (type) => {
     qrcode: QrCode,
     barcode: Barcode,
     rating: Star,
+    handwriting: PenTool,
   };
   return icons[type] || Square;
 };
