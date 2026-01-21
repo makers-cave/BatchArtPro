@@ -55,6 +55,152 @@ const ColorInput = ({ value, onChange, label }) => (
   </div>
 );
 
+// Handwriting Tab Component
+const HandwritingTab = ({ element, updateElement, updateExtraProps }) => {
+  const [handwritingText, setHandwritingText] = useState(element.extraProps?.text || 'Hello World');
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const generateHandwriting = async () => {
+    if (!handwritingText.trim()) {
+      toast.error('Please enter some text');
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/handwriting/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: handwritingText,
+          style: element.extraProps?.style || 9,
+          bias: element.extraProps?.bias || 0.75,
+          color: element.extraProps?.strokeColor || '#000000',
+          strokeWidth: element.extraProps?.strokeWidth || 2,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to generate handwriting');
+      }
+
+      const data = await response.json();
+      
+      // Update element with SVG content
+      updateElement({ 
+        content: data.svg,
+        height: Math.max(element.height, data.height),
+      });
+      updateExtraProps({ 
+        text: handwritingText,
+        svgPaths: data.paths,
+        svgWidth: data.width,
+        svgHeight: data.height,
+      });
+      
+      toast.success('Handwriting generated!');
+    } catch (error) {
+      console.error('Handwriting generation error:', error);
+      toast.error(error.message || 'Failed to generate handwriting');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  return (
+    <TabsContent value="handwriting" className="p-4 space-y-4">
+      <div>
+        <Label className="text-xs text-muted-foreground mb-2 block">Text to Handwrite</Label>
+        <Textarea
+          value={handwritingText}
+          onChange={(e) => setHandwritingText(e.target.value)}
+          placeholder="Enter text to convert to handwriting..."
+          className="min-h-[80px] text-sm"
+          data-testid="handwriting-text-input"
+        />
+      </div>
+
+      <Button
+        onClick={generateHandwriting}
+        disabled={isGenerating}
+        className="w-full"
+        data-testid="generate-handwriting-btn"
+      >
+        {isGenerating ? (
+          <>
+            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+            Generating...
+          </>
+        ) : (
+          'Update Handwriting'
+        )}
+      </Button>
+
+      <div>
+        <Label className="text-xs text-muted-foreground mb-2 block">
+          Style (0-11)
+        </Label>
+        <div className="flex items-center gap-2">
+          <Slider
+            value={[element.extraProps?.style || 9]}
+            onValueChange={([value]) => updateExtraProps({ style: value })}
+            min={0}
+            max={11}
+            step={1}
+            className="flex-1"
+            data-testid="handwriting-style-slider"
+          />
+          <span className="text-xs font-mono w-6">{element.extraProps?.style || 9}</span>
+        </div>
+      </div>
+
+      <div>
+        <Label className="text-xs text-muted-foreground mb-2 block">
+          Neatness (Bias)
+        </Label>
+        <div className="flex items-center gap-2">
+          <Slider
+            value={[(element.extraProps?.bias || 0.75) * 100]}
+            onValueChange={([value]) => updateExtraProps({ bias: value / 100 })}
+            min={0}
+            max={100}
+            step={5}
+            className="flex-1"
+            data-testid="handwriting-bias-slider"
+          />
+          <span className="text-xs font-mono w-10">{Math.round((element.extraProps?.bias || 0.75) * 100)}%</span>
+        </div>
+      </div>
+
+      <div>
+        <Label className="text-xs text-muted-foreground mb-2 block">Stroke Color</Label>
+        <ColorInput
+          value={element.extraProps?.strokeColor || '#000000'}
+          onChange={(value) => updateExtraProps({ strokeColor: value })}
+          label="Stroke"
+        />
+      </div>
+
+      <div>
+        <Label className="text-xs text-muted-foreground mb-2 block">Stroke Width</Label>
+        <div className="flex items-center gap-2">
+          <Slider
+            value={[element.extraProps?.strokeWidth || 2]}
+            onValueChange={([value]) => updateExtraProps({ strokeWidth: value })}
+            min={1}
+            max={5}
+            step={0.5}
+            className="flex-1"
+            data-testid="handwriting-stroke-width-slider"
+          />
+          <span className="text-xs font-mono w-6">{element.extraProps?.strokeWidth || 2}</span>
+        </div>
+      </div>
+    </TabsContent>
+  );
+};
+
 const FONT_FAMILIES = [
   'Arial',
   'Helvetica',
