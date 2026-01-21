@@ -349,6 +349,7 @@ export const CanvasElement = ({
     transform: `rotate(${rotation}deg)`,
     transformOrigin: 'center center',
     zIndex: element.zIndex + 10,
+    cursor: locked ? 'not-allowed' : 'move',
   };
 
   return (
