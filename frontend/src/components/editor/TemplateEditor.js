@@ -322,6 +322,30 @@ export const TemplateEditor = () => {
           }
           break;
           
+        case 'handwriting':
+          // Draw handwriting SVG paths
+          if (element.extraProps?.svgPaths && element.extraProps.svgPaths.length > 0) {
+            const svgWidth = element.extraProps.svgWidth || 1000;
+            const svgHeight = element.extraProps.svgHeight || 120;
+            const scaleX = element.width / svgWidth;
+            const scaleY = element.height / svgHeight;
+            
+            ctx.save();
+            ctx.translate(element.x, element.y);
+            ctx.scale(scaleX, scaleY);
+            
+            element.extraProps.svgPaths.forEach(pathData => {
+              const path2D = new Path2D(pathData.path);
+              ctx.strokeStyle = pathData.color || '#000000';
+              ctx.lineWidth = (pathData.width || 2) / Math.min(scaleX, scaleY);
+              ctx.lineCap = 'round';
+              ctx.stroke(path2D);
+            });
+            
+            ctx.restore();
+          }
+          break;
+          
         default:
           break;
       }
