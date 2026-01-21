@@ -299,7 +299,7 @@ export const CanvasElement = ({
 
       case 'qrcode':
         return (
-          <div style={baseStyle}>
+          <div className="w-full h-full flex items-center justify-center" style={elementStyle}>
             <QRCodePlaceholder 
               content={content} 
               size={Math.min(width, height) * zoom} 
@@ -309,7 +309,7 @@ export const CanvasElement = ({
 
       case 'barcode':
         return (
-          <div style={baseStyle}>
+          <div className="w-full h-full flex items-center justify-center" style={elementStyle}>
             <BarcodePlaceholder 
               content={content}
               width={width * zoom}
@@ -322,11 +322,8 @@ export const CanvasElement = ({
       case 'rating':
         return (
           <div
-            style={{
-              ...baseStyle,
-              display: 'flex',
-              alignItems: 'center',
-            }}
+            className="w-full h-full flex items-center"
+            style={elementStyle}
           >
             <RatingStars
               value={content}
