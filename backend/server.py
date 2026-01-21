@@ -470,9 +470,6 @@ async def import_template(file: UploadFile = File(...)):
         logger.error(f"Import error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-# Include the router in the main app
-app.include_router(api_router)
-
 # ============== Handwriting Synthesis ==============
 
 class HandwritingRequest(BaseModel):
@@ -507,6 +504,9 @@ async def generate_handwriting(request: HandwritingRequest):
     except Exception as e:
         logger.error(f"Handwriting generation error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate handwriting: {str(e)}")
+
+# Include the router in the main app
+app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
