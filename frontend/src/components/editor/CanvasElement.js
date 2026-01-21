@@ -350,7 +350,6 @@ export const CanvasElement = ({
     transformOrigin: 'center center',
     zIndex: element.zIndex + 10,
     cursor: locked ? 'not-allowed' : 'move',
-    border: '1px dashed red', // Debug border
   };
 
   return (
