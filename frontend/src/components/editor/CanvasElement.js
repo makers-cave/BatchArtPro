@@ -159,16 +159,10 @@ export const CanvasElement = ({
     }
   };
 
-  const baseStyle = {
-    position: 'absolute',
-    left: x * zoom,
-    top: y * zoom,
-    width: width * zoom,
-    height: height * zoom,
-    transform: `rotate(${rotation}deg)`,
+  const elementStyle = {
+    width: '100%',
+    height: '100%',
     opacity: style.opacity,
-    cursor: locked ? 'not-allowed' : 'move',
-    pointerEvents: locked ? 'none' : 'auto',
   };
 
   const renderElement = () => {
@@ -176,8 +170,9 @@ export const CanvasElement = ({
       case 'text':
         return (
           <div
+            className="w-full h-full"
             style={{
-              ...baseStyle,
+              ...elementStyle,
               display: 'flex',
               alignItems: 'center',
               justifyContent: textStyle?.textAlign === 'center' ? 'center' : 
