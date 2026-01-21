@@ -4,9 +4,6 @@ Generates SVG handwriting from text using the handwriting-synthesis library.
 """
 import os
 import sys
-import numpy as np
-import svgwrite
-import io
 
 # Set TensorFlow logging before importing
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -15,12 +12,20 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 HANDWRITING_LIB_PATH = os.path.join(os.path.dirname(__file__), 'handwriting_lib')
 sys.path.insert(0, HANDWRITING_LIB_PATH)
 
-# Update config paths to use absolute paths
-import handwriting_synthesis.config as config
-config.BASE_PATH = os.path.join(HANDWRITING_LIB_PATH, "model")
-config.checkpoint_path = os.path.join(config.BASE_PATH, "checkpoint")
-config.prediction_path = os.path.join(config.BASE_PATH, "prediction")
-config.style_path = os.path.join(config.BASE_PATH, "style")
+# Patch the config module BEFORE any other imports
+MODEL_PATH = os.path.join(HANDWRITING_LIB_PATH, "model")
+
+# Monkey-patch the config
+import handwriting_synthesis.config
+handwriting_synthesis.config.BASE_PATH = MODEL_PATH
+handwriting_synthesis.config.checkpoint_path = os.path.join(MODEL_PATH, "checkpoint")
+handwriting_synthesis.config.prediction_path = os.path.join(MODEL_PATH, "prediction")
+handwriting_synthesis.config.style_path = os.path.join(MODEL_PATH, "style")
+
+# Now import the rest
+import numpy as np
+import svgwrite
+from handwriting_synthesis import drawing
 
 # Lazy loading of the model to avoid slow startup
 _hand_instance = None
@@ -55,8 +60,6 @@ def generate_handwriting_svg(
     Returns:
         SVG content as string
     """
-    from handwriting_synthesis import drawing
-    
     hand = get_hand()
     
     # Set defaults
