@@ -1,0 +1,173 @@
+{
+  "identity": {
+    "name": "E1: The Creative Workbench",
+    "archetype": "The Performance Pro (Archetype 2) x Swiss High-Contrast",
+    "vibe": "Precision, Industrial, Electric, Dark-Mode-First",
+    "principles": [
+      "Fusion over Imitation: Mix industrial tool aesthetics with creative freedom.",
+      "Content is King: The canvas is the hero; UI recedes.",
+      "Contrast: High-contrast accents (Electric Green) against deep matte backgrounds.",
+      "Density: High density for the editor, breathing room for the dashboard."
+    ]
+  },
+  "typography": {
+    "fonts": {
+      "heading": "Chivo",
+      "body": "Manrope",
+      "mono": "JetBrains Mono"
+    },
+    "weights": {
+      "heading": "900",
+      "body": "400",
+      "bold": "700"
+    },
+    "sizes": {
+      "h1": "text-4xl md:text-5xl tracking-tight",
+      "h2": "text-3xl tracking-tight",
+      "h3": "text-2xl font-bold",
+      "body": "text-sm leading-relaxed",
+      "small": "text-xs font-medium tracking-wide uppercase"
+    },
+    "imports": [
+      "@import url('https://fonts.googleapis.com/css2?family=Chivo:wght@400;700;900&family=Manrope:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');"
+    ]
+  },
+  "colors": {
+    "palette": {
+      "primary": {
+        "name": "Electric Lime",
+        "hex": "#a3e635",
+        "tailwind": "lime-400"
+      },
+      "background": {
+        "dark": "#09090b",
+        "light": "#ffffff"
+      },
+      "surface": {
+        "dark": "#18181b",
+        "light": "#f4f4f5"
+      },
+      "border": {
+        "dark": "#27272a",
+        "light": "#e4e4e7"
+      }
+    },
+    "theme_config": {
+      "light": {
+        "--background": "0 0% 100%",
+        "--foreground": "240 10% 3.9%",
+        "--card": "0 0% 100%",
+        "--card-foreground": "240 10% 3.9%",
+        "--popover": "0 0% 100%",
+        "--popover-foreground": "240 10% 3.9%",
+        "--primary": "84 81% 44%",
+        "--primary-foreground": "0 0% 98%",
+        "--secondary": "240 4.8% 95.9%",
+        "--secondary-foreground": "240 5.9% 10%",
+        "--muted": "240 4.8% 95.9%",
+        "--muted-foreground": "240 3.8% 46.1%",
+        "--accent": "240 4.8% 95.9%",
+        "--accent-foreground": "240 5.9% 10%",
+        "--destructive": "0 84.2% 60.2%",
+        "--destructive-foreground": "0 0% 98%",
+        "--border": "240 5.9% 90%",
+        "--input": "240 5.9% 90%",
+        "--ring": "84 81% 44%"
+      },
+      "dark": {
+        "--background": "240 10% 3.9%",
+        "--foreground": "0 0% 98%",
+        "--card": "240 10% 3.9%",
+        "--card-foreground": "0 0% 98%",
+        "--popover": "240 10% 3.9%",
+        "--popover-foreground": "0 0% 98%",
+        "--primary": "84 100% 59%",
+        "--primary-foreground": "240 5.9% 10%",
+        "--secondary": "240 3.7% 15.9%",
+        "--secondary-foreground": "0 0% 98%",
+        "--muted": "240 3.7% 15.9%",
+        "--muted-foreground": "240 5% 64.9%",
+        "--accent": "240 3.7% 15.9%",
+        "--accent-foreground": "0 0% 98%",
+        "--destructive": "0 62.8% 30.6%",
+        "--destructive-foreground": "0 0% 98%",
+        "--border": "240 3.7% 15.9%",
+        "--input": "240 3.7% 15.9%",
+        "--ring": "84 100% 59%"
+      }
+    }
+  },
+  "layout": {
+    "spacing": {
+      "container_padding": "p-6 md:p-8",
+      "section_gap": "gap-8",
+      "item_gap": "gap-4"
+    },
+    "grid": {
+      "dashboard": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6",
+      "editor": "flex h-screen overflow-hidden"
+    },
+    "containers": {
+      "sidebar": "w-72 border-r bg-card/50 backdrop-blur-xl flex flex-col",
+      "canvas_area": "flex-1 bg-muted/20 relative overflow-hidden flex items-center justify-center",
+      "properties_panel": "w-80 border-l bg-card/50 backdrop-blur-xl overflow-y-auto"
+    }
+  },
+  "components": {
+    "buttons": {
+      "default": "rounded-md font-medium transition-all active:scale-95",
+      "primary": "bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_20px_-5px_rgba(163,230,53,0.4)]",
+      "ghost": "hover:bg-accent hover:text-accent-foreground"
+    },
+    "cards": {
+      "base": "rounded-lg border bg-card text-card-foreground shadow-sm",
+      "hover": "hover:border-primary/50 transition-colors duration-300"
+    },
+    "inputs": {
+      "base": "h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+    }
+  },
+  "assets": {
+    "images": [
+      {
+        "category": "product_placeholder",
+        "url": "https://images.unsplash.com/photo-1611930021698-a55ec4d5fe6e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODd8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwcHJvZHVjdCUyMHBob3RvZ3JhcGh5fGVufDB8fHx8MTc2OTAyMjUyNHww&ixlib=rb-4.1.0&q=85",
+        "description": "Black and white labeled bottle"
+      },
+      {
+        "category": "product_placeholder",
+        "url": "https://images.unsplash.com/photo-1684721689327-9ff62a215161?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODd8MHwxfHNlYXJjaHwyfHxtaW5pbWFsaXN0JTIwcHJvZHVjdCUyMHBob3RvZ3JhcGh5fGVufDB8fHx8MTc2OTAyMjUyNHww&ixlib=rb-4.1.0&q=85",
+        "description": "White minimalist handbag detail"
+      },
+      {
+        "category": "product_placeholder",
+        "url": "https://images.unsplash.com/photo-1631984564919-1f6b2313a71c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODd8MHwxfHNlYXJjaHw0fHxtaW5pbWFsaXN0JTIwcHJvZHVjdCUyMHBob3RvZ3JhcGh5fGVufDB8fHx8MTc2OTAyMjUyNHww&ixlib=rb-4.1.0&q=85",
+        "description": "Minimalist sneakers"
+      }
+    ],
+    "icons": {
+      "library": "lucide-react",
+      "instructions": "Use Lucide React for all UI icons. Use 16px (w-4 h-4) for dense UI, 20px (w-5 h-5) for standard buttons."
+    }
+  },
+  "instructions_to_main_agent": [
+    "CRITICAL: Use the 'Manrope' font for UI and 'Chivo' for Headings. Do NOT use Inter.",
+    "CRITICAL: Implement the 'Electric Lime' (#a3e635) as the primary color. Do NOT use blue.",
+    "CRITICAL: The Editor UI must be dense. Use 'h-8' or 'h-9' for inputs and buttons in the sidebar/properties panel.",
+    "CRITICAL: Use 'JetBrains Mono' for any coordinate values (X, Y, W, H) or code snippets.",
+    "CRITICAL: Ensure the Canvas area has a subtle dot or grid pattern background for precision feel.",
+    "CRITICAL: All interactive elements must have 'data-testid'.",
+    "CRITICAL: Use 'sonner' for toast notifications.",
+    "CRITICAL: Do not use 'transparent' backgrounds for dropdowns or popovers; use 'bg-popover' or 'bg-card'.",
+    "CRITICAL: For the 'Data Integration' tab, use a clean table layout with 'border-collapse' and subtle row borders.",
+    "CRITICAL: The 'Export' modal should use a 'Dialog' component with clear, large format selection cards."
+  ],
+  "universal_guidelines": [
+    "Don't make generic centered layouts.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur) for floating panels.",
+    "Every interaction needs micro-animations.",
+    "Use 2-3x more spacing than feels comfortable in the Dashboard, but keep the Editor dense.",
+    "Subtle grain textures or noise overlays are encouraged for the Dashboard background."
+  ]
+}
