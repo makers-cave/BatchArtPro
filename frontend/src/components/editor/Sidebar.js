@@ -16,6 +16,7 @@ import {
   ImagePlus,
   CircleDot,
   Heart,
+  PenTool,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
