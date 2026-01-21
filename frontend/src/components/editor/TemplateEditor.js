@@ -711,6 +711,19 @@ function generateSVGContent(template) {
         font-weight="${el.textStyle?.fontWeight || 'normal'}"
         fill="${el.textStyle?.color || '#000000'}" text-anchor="${textAnchor}"
         ${transform} ${opacity}>${el.content || ''}</text>`;
+    } else if (el.type === 'image' && el.content) {
+      // Add image with clip path for circle variant
+      const clipId = `clip-${Math.random().toString(36).substr(2, 9)}`;
+      if (el.extraProps?.variant === 'circle') {
+        elementsContent += `<defs><clipPath id="${clipId}"><ellipse cx="${el.x + el.width/2}" cy="${el.y + el.height/2}" rx="${el.width/2}" ry="${el.height/2}"/></clipPath></defs>`;
+        elementsContent += `<image x="${el.x}" y="${el.y}" width="${el.width}" height="${el.height}" 
+          href="${el.content}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})"
+          ${transform} ${opacity} />`;
+      } else {
+        elementsContent += `<image x="${el.x}" y="${el.y}" width="${el.width}" height="${el.height}" 
+          href="${el.content}" preserveAspectRatio="xMidYMid slice"
+          ${transform} ${opacity} />`;
+      }
     }
   });
 
