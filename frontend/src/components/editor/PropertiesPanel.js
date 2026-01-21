@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useEditor } from '../../context/EditorContext';
 import { ScrollArea } from '../ui/scroll-area';
 import { Input } from '../ui/input';
@@ -7,6 +7,7 @@ import { Button } from '../ui/button';
 import { Slider } from '../ui/slider';
 import { Switch } from '../ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Textarea } from '../ui/textarea';
 import {
   Select,
   SelectContent,
@@ -25,7 +26,11 @@ import {
   ArrowDown,
   ChevronsUp,
   ChevronsDown,
+  RefreshCw,
 } from 'lucide-react';
+import { toast } from 'sonner';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 const PropertyRow = ({ label, children }) => (
   <div className="flex items-center gap-2 mb-2">
