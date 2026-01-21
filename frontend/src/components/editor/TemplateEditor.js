@@ -165,6 +165,77 @@ export const TemplateEditor = () => {
           ctx.fillRect(element.x, element.y, element.width, element.height);
           break;
           
+        case 'image':
+          // Draw image element
+          if (content) {
+            try {
+              const img = await loadImage(content);
+              const variant = element.extraProps?.variant || 'rectangle';
+              const fit = element.extraProps?.fit || 'cover';
+              
+              // Calculate image dimensions based on fit mode
+              let sx = 0, sy = 0, sw = img.width, sh = img.height;
+              let dx = element.x, dy = element.y, dw = element.width, dh = element.height;
+              
+              if (fit === 'cover') {
+                const imgRatio = img.width / img.height;
+                const boxRatio = element.width / element.height;
+                if (imgRatio > boxRatio) {
+                  sw = img.height * boxRatio;
+                  sx = (img.width - sw) / 2;
+                } else {
+                  sh = img.width / boxRatio;
+                  sy = (img.height - sh) / 2;
+                }
+              }
+              
+              // Apply clipping for circle variant
+              if (variant === 'circle') {
+                ctx.beginPath();
+                ctx.ellipse(
+                  element.x + element.width / 2,
+                  element.y + element.height / 2,
+                  element.width / 2,
+                  element.height / 2,
+                  0, 0, Math.PI * 2
+                );
+                ctx.clip();
+              }
+              
+              ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+            } catch (e) {
+              // Draw placeholder if image fails to load
+              ctx.fillStyle = element.style?.fill || '#f0f0f0';
+              ctx.fillRect(element.x, element.y, element.width, element.height);
+              ctx.fillStyle = '#999999';
+              ctx.font = '14px Arial';
+              ctx.textAlign = 'center';
+              ctx.fillText('Image', element.x + element.width/2, element.y + element.height/2);
+            }
+          } else {
+            // Draw empty placeholder
+            ctx.fillStyle = element.style?.fill || '#f0f0f0';
+            if (element.extraProps?.variant === 'circle') {
+              ctx.beginPath();
+              ctx.ellipse(
+                element.x + element.width / 2,
+                element.y + element.height / 2,
+                element.width / 2,
+                element.height / 2,
+                0, 0, Math.PI * 2
+              );
+              ctx.fill();
+            } else {
+              ctx.fillRect(element.x, element.y, element.width, element.height);
+            }
+            if (element.style?.strokeWidth > 0) {
+              ctx.strokeStyle = element.style?.stroke || '#cccccc';
+              ctx.lineWidth = element.style.strokeWidth;
+              ctx.strokeRect(element.x, element.y, element.width, element.height);
+            }
+          }
+          break;
+          
         case 'text':
           const fontSize = element.textStyle?.fontSize || 16;
           const fontFamily = element.textStyle?.fontFamily || 'Arial';
