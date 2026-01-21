@@ -25,6 +25,9 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { templatesApi, exportApi } from '../../lib/api';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
+import { jsPDF } from 'jspdf';
 
 export const TemplateEditor = () => {
   const { state, actions } = useEditor();
@@ -32,7 +35,6 @@ export const TemplateEditor = () => {
   const [activeMainTab, setActiveMainTab] = useState('editor');
   const [savedTemplates, setSavedTemplates] = useState([]);
   const [templatesDialogOpen, setTemplatesDialogOpen] = useState(false);
-  const [historyEntries, setHistoryEntries] = useState([]);
 
   // Load saved templates
   const loadTemplates = useCallback(async () => {
@@ -72,30 +74,209 @@ export const TemplateEditor = () => {
     }
   };
 
-  // Export template
+  // Render template to canvas with data
+  const renderTemplateToCanvas = async (template, data = {}) => {
+    const { width, height, backgroundColor } = template.settings;
+    
+    // Create off-screen canvas
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = width;
+    offCanvas.height = height;
+    const ctx = offCanvas.getContext('2d');
+    
+    // Fill background
+    ctx.fillStyle = backgroundColor || '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    
+    // Sort elements by zIndex
+    const sortedElements = [...template.elements].sort((a, b) => a.zIndex - b.zIndex);
+    
+    // Render each element
+    for (const element of sortedElements) {
+      if (!element.visible) continue;
+      
+      ctx.save();
+      
+      // Apply transforms
+      const centerX = element.x + element.width / 2;
+      const centerY = element.y + element.height / 2;
+      ctx.translate(centerX, centerY);
+      ctx.rotate((element.rotation || 0) * Math.PI / 180);
+      ctx.translate(-centerX, -centerY);
+      ctx.globalAlpha = element.style?.opacity ?? 1;
+      
+      // Get content with data merge
+      let content = element.content || '';
+      if (data && Object.keys(data).length > 0) {
+        Object.keys(data).forEach((key) => {
+          const pattern = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+          content = content.replace(pattern, String(data[key]));
+        });
+        if (element.dataField) {
+          const fieldMatch = element.dataField.match(/\{\{(\w+)\}\}/);
+          if (fieldMatch && data[fieldMatch[1]]) {
+            content = String(data[fieldMatch[1]]);
+          }
+        }
+      }
+      
+      switch (element.type) {
+        case 'rectangle':
+          ctx.fillStyle = element.style?.fill || '#cccccc';
+          ctx.fillRect(element.x, element.y, element.width, element.height);
+          if (element.style?.strokeWidth > 0) {
+            ctx.strokeStyle = element.style?.stroke || '#000000';
+            ctx.lineWidth = element.style.strokeWidth;
+            ctx.strokeRect(element.x, element.y, element.width, element.height);
+          }
+          break;
+          
+        case 'circle':
+          ctx.fillStyle = element.style?.fill || '#cccccc';
+          ctx.beginPath();
+          ctx.ellipse(
+            element.x + element.width / 2,
+            element.y + element.height / 2,
+            element.width / 2,
+            element.height / 2,
+            0, 0, Math.PI * 2
+          );
+          ctx.fill();
+          if (element.style?.strokeWidth > 0) {
+            ctx.strokeStyle = element.style?.stroke || '#000000';
+            ctx.lineWidth = element.style.strokeWidth;
+            ctx.stroke();
+          }
+          break;
+          
+        case 'line':
+          ctx.fillStyle = element.style?.fill || '#000000';
+          ctx.fillRect(element.x, element.y, element.width, element.height);
+          break;
+          
+        case 'text':
+          const fontSize = element.textStyle?.fontSize || 16;
+          const fontFamily = element.textStyle?.fontFamily || 'Arial';
+          const fontWeight = element.textStyle?.fontWeight || 'normal';
+          const fontStyle = element.textStyle?.fontStyle || 'normal';
+          ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
+          ctx.fillStyle = element.textStyle?.color || '#000000';
+          ctx.textAlign = element.textStyle?.textAlign || 'left';
+          ctx.textBaseline = 'top';
+          
+          // Word wrap text
+          const words = content.split(' ');
+          let line = '';
+          let y = element.y + 4;
+          const lineHeight = fontSize * (element.textStyle?.lineHeight || 1.2);
+          const maxWidth = element.width - 8;
+          
+          for (let word of words) {
+            const testLine = line + word + ' ';
+            const metrics = ctx.measureText(testLine);
+            if (metrics.width > maxWidth && line !== '') {
+              const xPos = element.textStyle?.textAlign === 'center' 
+                ? element.x + element.width / 2 
+                : element.textStyle?.textAlign === 'right'
+                  ? element.x + element.width - 4
+                  : element.x + 4;
+              ctx.fillText(line.trim(), xPos, y);
+              line = word + ' ';
+              y += lineHeight;
+            } else {
+              line = testLine;
+            }
+          }
+          const xPos = element.textStyle?.textAlign === 'center' 
+            ? element.x + element.width / 2 
+            : element.textStyle?.textAlign === 'right'
+              ? element.x + element.width - 4
+              : element.x + 4;
+          ctx.fillText(line.trim(), xPos, y);
+          break;
+          
+        case 'rating':
+          const rating = parseFloat(content) || 0;
+          const maxStars = element.extraProps?.maxStars || 5;
+          const starSize = Math.min(element.width / maxStars, element.height) * 0.8;
+          const starColor = element.extraProps?.starColor || '#FFD700';
+          const emptyColor = element.extraProps?.emptyColor || '#E0E0E0';
+          
+          for (let i = 0; i < maxStars; i++) {
+            ctx.fillStyle = i < rating ? starColor : emptyColor;
+            drawStar(ctx, element.x + i * starSize + starSize/2, element.y + element.height/2, starSize/2, 5);
+          }
+          break;
+          
+        case 'qrcode':
+          // Draw QR code placeholder pattern
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(element.x, element.y, element.width, element.height);
+          ctx.fillStyle = '#000000';
+          const cellSize = Math.min(element.width, element.height) / 25;
+          for (let row = 0; row < 25; row++) {
+            for (let col = 0; col < 25; col++) {
+              if (Math.random() > 0.5 || (row < 7 && col < 7) || (row < 7 && col > 17) || (row > 17 && col < 7)) {
+                ctx.fillRect(element.x + col * cellSize, element.y + row * cellSize, cellSize, cellSize);
+              }
+            }
+          }
+          break;
+          
+        case 'barcode':
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(element.x, element.y, element.width, element.height);
+          ctx.fillStyle = '#000000';
+          const barWidth = element.width / 60;
+          for (let i = 0; i < 60; i++) {
+            if (Math.random() > 0.4) {
+              ctx.fillRect(element.x + i * barWidth, element.y, barWidth * 0.8, element.height * 0.75);
+            }
+          }
+          if (element.extraProps?.displayValue) {
+            ctx.font = '12px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(content, element.x + element.width/2, element.y + element.height - 5);
+          }
+          break;
+          
+        default:
+          break;
+      }
+      
+      ctx.restore();
+    }
+    
+    return offCanvas;
+  };
+
+  // Export template (single)
   const handleExport = async (format) => {
-    // Canvas to image export (client-side)
     if (!canvasRef.current) {
       toast.error('Canvas not ready');
       return;
     }
 
     try {
-      const canvas = canvasRef.current;
       const { width, height } = state.template.settings;
-
+      
       if (format === 'svg') {
-        // Create SVG export
         const svgContent = generateSVGContent(state.template);
         const blob = new Blob([svgContent], { type: 'image/svg+xml' });
         downloadBlob(blob, `${state.template.name}.svg`);
       } else if (format === 'pdf') {
-        // PDF would require additional library
-        toast.info('PDF export requires server-side rendering');
+        const canvas = await renderTemplateToCanvas(state.template);
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({
+          orientation: width > height ? 'landscape' : 'portrait',
+          unit: 'px',
+          format: [width, height]
+        });
+        pdf.addImage(imgData, 'PNG', 0, 0, width, height);
+        pdf.save(`${state.template.name}.pdf`);
       } else {
-        // PNG/JPEG export using html2canvas approach
         const html2canvas = (await import('html2canvas')).default;
-        const canvasImage = await html2canvas(canvas, {
+        const canvasImage = await html2canvas(canvasRef.current, {
           width,
           height,
           scale: 2,
@@ -126,22 +307,65 @@ export const TemplateEditor = () => {
 
       const { template, dataRows } = response.data;
       
-      toast.info(`Generating ${dataRows.length} exports...`);
-      
-      // Process each row
-      for (let i = 0; i < dataRows.length; i++) {
-        const row = dataRows[i];
-        // Merge data into template
-        const mergedTemplate = mergeDataIntoTemplate(template, row);
-        
-        // For now, just log - actual rendering would need more complex handling
-        console.log(`Export ${i + 1}:`, mergedTemplate);
+      if (!dataRows || dataRows.length === 0) {
+        toast.error('No data rows to export');
+        return;
       }
       
-      toast.success(`Batch export complete: ${dataRows.length} items`);
+      toast.info(`Generating ${dataRows.length} exports...`);
+      
+      if (format === 'pdf') {
+        // Create single PDF with all pages
+        const { width, height } = template.settings;
+        const pdf = new jsPDF({
+          orientation: width > height ? 'landscape' : 'portrait',
+          unit: 'px',
+          format: [width, height]
+        });
+        
+        for (let i = 0; i < dataRows.length; i++) {
+          if (i > 0) {
+            pdf.addPage([width, height], width > height ? 'landscape' : 'portrait');
+          }
+          
+          const mergedTemplate = mergeDataIntoTemplate(template, dataRows[i]);
+          const canvas = await renderTemplateToCanvas(mergedTemplate, dataRows[i]);
+          const imgData = canvas.toDataURL('image/png');
+          pdf.addImage(imgData, 'PNG', 0, 0, width, height);
+          
+          toast.info(`Processing page ${i + 1}/${dataRows.length}...`);
+        }
+        
+        pdf.save(`${template.name}_batch.pdf`);
+        toast.success(`PDF exported with ${dataRows.length} pages`);
+      } else {
+        // Create ZIP with individual files
+        const zip = new JSZip();
+        const mimeType = format === 'jpeg' ? 'image/jpeg' : format === 'png' ? 'image/png' : 'image/svg+xml';
+        const extension = format;
+        
+        for (let i = 0; i < dataRows.length; i++) {
+          const mergedTemplate = mergeDataIntoTemplate(template, dataRows[i]);
+          
+          if (format === 'svg') {
+            const svgContent = generateSVGContent(mergedTemplate);
+            zip.file(`${template.name}_${i + 1}.svg`, svgContent);
+          } else {
+            const canvas = await renderTemplateToCanvas(mergedTemplate, dataRows[i]);
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, mimeType, 0.95));
+            zip.file(`${template.name}_${i + 1}.${extension}`, blob);
+          }
+          
+          toast.info(`Processing ${i + 1}/${dataRows.length}...`);
+        }
+        
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        saveAs(zipBlob, `${template.name}_batch.zip`);
+        toast.success(`ZIP exported with ${dataRows.length} files`);
+      }
     } catch (error) {
       console.error('Batch export error:', error);
-      toast.error('Batch export failed');
+      toast.error('Batch export failed: ' + error.message);
     }
   };
 
@@ -296,8 +520,10 @@ export const TemplateEditor = () => {
         </div>
       </div>
 
-      {/* Toolbar */}
-      <Toolbar onSave={handleSave} onExport={handleExport} />
+      {/* Toolbar - Only show for editor tab */}
+      {activeMainTab === 'editor' && (
+        <Toolbar onSave={handleSave} onExport={handleExport} />
+      )}
 
       {/* Main content area */}
       <div className="flex-1 flex overflow-hidden">
@@ -359,26 +585,59 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
+function drawStar(ctx, cx, cy, r, points) {
+  ctx.beginPath();
+  for (let i = 0; i < points * 2; i++) {
+    const radius = i % 2 === 0 ? r : r * 0.5;
+    const angle = (i * Math.PI) / points - Math.PI / 2;
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
 function generateSVGContent(template) {
   const { settings, elements } = template;
   
   let elementsContent = '';
-  elements.forEach((el) => {
+  const sortedElements = [...elements].sort((a, b) => a.zIndex - b.zIndex);
+  
+  sortedElements.forEach((el) => {
+    if (!el.visible) return;
+    
+    const transform = el.rotation ? `transform="rotate(${el.rotation} ${el.x + el.width/2} ${el.y + el.height/2})"` : '';
+    const opacity = el.style?.opacity !== 1 ? `opacity="${el.style.opacity}"` : '';
+    
     if (el.type === 'rectangle') {
       elementsContent += `<rect x="${el.x}" y="${el.y}" width="${el.width}" height="${el.height}" 
-        fill="${el.style.fill}" stroke="${el.style.stroke}" stroke-width="${el.style.strokeWidth}"
-        transform="rotate(${el.rotation} ${el.x + el.width/2} ${el.y + el.height/2})" />`;
+        fill="${el.style?.fill || '#cccccc'}" stroke="${el.style?.stroke || '#000000'}" 
+        stroke-width="${el.style?.strokeWidth || 0}" ${transform} ${opacity} />`;
     } else if (el.type === 'circle') {
       const cx = el.x + el.width / 2;
       const cy = el.y + el.height / 2;
-      const r = Math.min(el.width, el.height) / 2;
-      elementsContent += `<circle cx="${cx}" cy="${cy}" r="${r}" 
-        fill="${el.style.fill}" stroke="${el.style.stroke}" stroke-width="${el.style.strokeWidth}" />`;
+      const rx = el.width / 2;
+      const ry = el.height / 2;
+      elementsContent += `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" 
+        fill="${el.style?.fill || '#cccccc'}" stroke="${el.style?.stroke || '#000000'}" 
+        stroke-width="${el.style?.strokeWidth || 0}" ${transform} ${opacity} />`;
+    } else if (el.type === 'line') {
+      elementsContent += `<rect x="${el.x}" y="${el.y}" width="${el.width}" height="${el.height}" 
+        fill="${el.style?.fill || '#000000'}" ${transform} ${opacity} />`;
     } else if (el.type === 'text') {
-      elementsContent += `<text x="${el.x}" y="${el.y + (el.textStyle?.fontSize || 16)}" 
-        font-family="${el.textStyle?.fontFamily || 'Arial'}" 
-        font-size="${el.textStyle?.fontSize || 16}"
-        fill="${el.textStyle?.color || '#000000'}">${el.content || ''}</text>`;
+      const fontSize = el.textStyle?.fontSize || 16;
+      const fontFamily = el.textStyle?.fontFamily || 'Arial';
+      const textAnchor = el.textStyle?.textAlign === 'center' ? 'middle' : 
+                         el.textStyle?.textAlign === 'right' ? 'end' : 'start';
+      const x = el.textStyle?.textAlign === 'center' ? el.x + el.width/2 : 
+                el.textStyle?.textAlign === 'right' ? el.x + el.width : el.x;
+      elementsContent += `<text x="${x}" y="${el.y + fontSize}" 
+        font-family="${fontFamily}" font-size="${fontSize}"
+        font-weight="${el.textStyle?.fontWeight || 'normal'}"
+        fill="${el.textStyle?.color || '#000000'}" text-anchor="${textAnchor}"
+        ${transform} ${opacity}>${el.content || ''}</text>`;
     }
   });
 
