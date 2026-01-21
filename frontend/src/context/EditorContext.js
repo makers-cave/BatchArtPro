@@ -299,6 +299,11 @@ export const EditorProvider = ({ children }) => {
       const newElement = {
         id: uuidv4(),
         zIndex: state.template.elements.length,
+        visible: true,
+        locked: false,
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
         ...element,
       };
       dispatch({ type: ActionTypes.ADD_ELEMENT, payload: newElement });
