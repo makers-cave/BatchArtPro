@@ -224,8 +224,9 @@ export const CanvasElement = ({
       case 'rectangle':
         return (
           <div
+            className="w-full h-full"
             style={{
-              ...baseStyle,
+              ...elementStyle,
               backgroundColor: style.fill,
               border: `${style.strokeWidth}px solid ${style.stroke}`,
               boxShadow: style.shadowBlur > 0 
@@ -238,8 +239,9 @@ export const CanvasElement = ({
       case 'circle':
         return (
           <div
+            className="w-full h-full"
             style={{
-              ...baseStyle,
+              ...elementStyle,
               backgroundColor: style.fill,
               border: `${style.strokeWidth}px solid ${style.stroke}`,
               borderRadius: '50%',
@@ -253,10 +255,12 @@ export const CanvasElement = ({
       case 'line':
         return (
           <div
+            className="w-full"
             style={{
-              ...baseStyle,
+              ...elementStyle,
               backgroundColor: style.fill,
-              height: Math.max(2, height * zoom),
+              height: '100%',
+              minHeight: 2,
             }}
           />
         );
@@ -265,15 +269,13 @@ export const CanvasElement = ({
         const imageVariant = extraProps?.variant || 'rectangle';
         return (
           <div
+            className="w-full h-full flex items-center justify-center"
             style={{
-              ...baseStyle,
+              ...elementStyle,
               backgroundColor: style.fill,
               border: `${style.strokeWidth}px solid ${style.stroke}`,
               borderRadius: imageVariant === 'circle' ? '50%' : 0,
               overflow: 'hidden',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
             }}
           >
             {content ? (
