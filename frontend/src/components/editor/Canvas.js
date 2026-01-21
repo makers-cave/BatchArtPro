@@ -278,9 +278,9 @@ export const Canvas = ({ canvasRef }) => {
         onClick={handleCanvasClick}
         onWheel={handleWheel}
       >
-        {/* Canvas wrapper for transform */}
+        {/* Canvas wrapper for transform - centered in viewport */}
         <div
-          className="absolute"
+          className="absolute inset-0 flex items-center justify-center"
           style={{
             transform: `translate(${pan.x}px, ${pan.y}px)`,
           }}
@@ -293,7 +293,7 @@ export const Canvas = ({ canvasRef }) => {
               width: settings.width * zoom,
               height: settings.height * zoom,
               backgroundColor: settings.backgroundColor,
-              transformOrigin: 'top left',
+              transformOrigin: 'center center',
             }}
             data-testid="canvas"
           >
