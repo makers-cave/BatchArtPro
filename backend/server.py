@@ -473,6 +473,41 @@ async def import_template(file: UploadFile = File(...)):
 # Include the router in the main app
 app.include_router(api_router)
 
+# ============== Handwriting Synthesis ==============
+
+class HandwritingRequest(BaseModel):
+    text: str
+    style: Optional[int] = 9  # 0-11
+    bias: Optional[float] = 0.75  # 0-1, higher = neater
+    color: Optional[str] = "black"
+    strokeWidth: Optional[int] = 2
+
+@api_router.post("/handwriting/generate")
+async def generate_handwriting(request: HandwritingRequest):
+    """Generate handwriting SVG from text"""
+    try:
+        from handwriting_helper import generate_handwriting_svg_simple
+        
+        result = generate_handwriting_svg_simple(
+            text=request.text,
+            style=request.style,
+            bias=request.bias,
+            color=request.color,
+            width=request.strokeWidth
+        )
+        
+        return {
+            "svg": result['svg'],
+            "width": result['width'],
+            "height": result['height'],
+            "paths": result['paths']
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Handwriting generation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate handwriting: {str(e)}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
