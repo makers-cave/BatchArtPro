@@ -1094,10 +1094,22 @@ async def generate_handwriting(request: HandwritingRequest):
 # Include the router in the main app
 app.include_router(api_router)
 
+# CORS configuration - must specify origins when credentials are allowed
+cors_origins = os.environ.get('CORS_ORIGINS', '*')
+if cors_origins == '*':
+    # For development, allow common origins
+    cors_origins_list = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://reactplate.preview.emergentagent.com",
+    ]
+else:
+    cors_origins_list = [o.strip() for o in cors_origins.split(',')]
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=cors_origins_list,
     allow_methods=["*"],
     allow_headers=["*"],
 )
