@@ -80,7 +80,15 @@ const HandwritingTab = ({ element, updateElement, updateExtraProps }) => {
         }),
       });
 
-      const data = await response.json();
+      // Clone response before reading to avoid "body stream already read" error
+      // (caused by Emergent platform fetch interceptor)
+      const responseClone = response.clone();
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        data = await responseClone.json();
+      }
       
       if (!response.ok) {
         throw new Error(data.detail || 'Failed to generate handwriting');
