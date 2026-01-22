@@ -134,7 +134,7 @@ export const AdminDashboard = ({ onOpenEditor }) => {
     try {
       const response = await fetch(`${BACKEND_URL}/api/admin/designs/${designId}/mark-exported`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
+        credentials: 'include'
       });
 
       if (response.ok) {
