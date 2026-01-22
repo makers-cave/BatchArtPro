@@ -236,60 +236,68 @@ class HistoryEntry(BaseModel):
     snapshot: Dict[str, Any]
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-# ============== Auth Helper Functions ==============
+# ============== Auth Helper Functions (Emergent Google OAuth) ==============
 
-def hash_password(password: str) -> str:
-    """Hash a password using SHA256"""
-    return hashlib.sha256(password.encode()).hexdigest()
+async def get_session_token_from_request(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None)
+) -> Optional[str]:
+    """Extract session token from cookie or Authorization header"""
+    # First try cookie
+    if session_token:
+        return session_token
+    
+    # Then try Authorization header as fallback
+    if authorization and authorization.startswith("Bearer "):
+        return authorization[7:]
+    
+    return None
 
-def verify_password(password: str, password_hash: str) -> bool:
-    """Verify a password against its hash"""
-    return hash_password(password) == password_hash
-
-def create_jwt_token(user_data: dict) -> str:
-    """Create a JWT token for a user"""
-    payload = {
-        "sub": user_data["id"],
-        "username": user_data["username"],
-        "role": user_data["role"],
-        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-
-def decode_jwt_token(token: str) -> Optional[dict]:
-    """Decode and verify a JWT token"""
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return payload
-    except jwt.ExpiredSignatureError:
-        return None
-    except jwt.InvalidTokenError:
-        return None
-
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Optional[dict]:
-    """Get current user from JWT token"""
-    if not credentials:
+async def get_current_user(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None)
+) -> Optional[Dict[str, Any]]:
+    """Get current user from session token (cookie or header)"""
+    token = await get_session_token_from_request(request, session_token, authorization)
+    
+    if not token:
         return None
     
-    payload = decode_jwt_token(credentials.credentials)
-    if not payload:
+    # Find session in database
+    session_doc = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
+    if not session_doc:
         return None
     
-    return payload
+    # Check expiration (handle timezone)
+    expires_at = session_doc["expires_at"]
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < datetime.now(timezone.utc):
+        return None
+    
+    # Get user
+    user_doc = await db.users.find_one({"user_id": session_doc["user_id"]}, {"_id": 0})
+    return user_doc
 
-async def require_admin(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+async def require_admin(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None)
+) -> Dict[str, Any]:
     """Require admin authentication"""
-    if not credentials:
+    user = await get_current_user(request, session_token, authorization)
+    
+    if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
     
-    payload = decode_jwt_token(credentials.credentials)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    
-    if payload.get("role") != "admin":
+    if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    return payload
+    return user
 
 # ============== Auth Endpoints ==============
 
