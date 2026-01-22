@@ -731,7 +731,13 @@ async def root():
     return {"message": "Template Editor API"}
 
 @api_router.post("/templates", response_model=Template)
-async def create_template(input: TemplateCreate, user: dict = Depends(require_admin)):
+async def create_template(
+    input: TemplateCreate,
+    request: Request = None,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None)
+):
+    user = await require_admin(request, session_token, authorization)
     template = Template(
         name=input.name,
         description=input.description,
