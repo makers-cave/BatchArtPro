@@ -113,7 +113,7 @@ export const AdminDashboard = ({ onOpenEditor }) => {
     setExporting(designId);
     try {
       const response = await fetch(`${BACKEND_URL}/api/admin/designs/${designId}/export?format=${format}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        credentials: 'include'
       });
 
       if (response.ok) {
