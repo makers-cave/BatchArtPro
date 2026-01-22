@@ -80,12 +80,11 @@ const HandwritingTab = ({ element, updateElement, updateExtraProps }) => {
         }),
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to generate handwriting');
-      }
-
       const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to generate handwriting');
+      }
       
       // Update element with SVG content
       updateElement({ 
