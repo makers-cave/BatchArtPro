@@ -53,31 +53,29 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ============== Auth Models ==============
+# ============== Auth Models (Emergent Google OAuth) ==============
 
-class AdminUser(BaseModel):
+class User(BaseModel):
     model_config = ConfigDict(extra="ignore")
     
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    username: str
+    user_id: str = Field(default_factory=lambda: f"user_{uuid.uuid4().hex[:12]}")
     email: str
-    password_hash: str
-    role: str = "admin"
-    createdAt: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    name: str
+    picture: Optional[str] = None
+    role: str = "admin"  # admin or customer
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class AdminLogin(BaseModel):
-    username: str
-    password: str
+class UserSession(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    user_id: str
+    session_token: str
+    expires_at: datetime
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class AdminCreate(BaseModel):
-    username: str
-    email: str
-    password: str
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: Dict[str, Any]
+class SessionRequest(BaseModel):
+    session_id: str
 
 # ============== WooCommerce Integration Models ==============
 
