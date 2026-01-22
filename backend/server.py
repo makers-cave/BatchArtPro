@@ -299,62 +299,136 @@ async def require_admin(
     
     return user
 
-# ============== Auth Endpoints ==============
+# ============== Auth Endpoints (Emergent Google OAuth) ==============
 
-@api_router.post("/auth/register", response_model=TokenResponse)
-async def register_admin(input: AdminCreate):
-    """Register a new admin user (first user only, or requires existing admin)"""
-    # Check if any admin exists
-    existing_admin = await db.admins.find_one({})
-    if existing_admin:
-        raise HTTPException(status_code=403, detail="Admin registration closed. Contact existing admin.")
-    
-    # Check if username exists
-    if await db.admins.find_one({"username": input.username}):
-        raise HTTPException(status_code=400, detail="Username already exists")
-    
-    # Create admin user
-    admin = AdminUser(
-        username=input.username,
-        email=input.email,
-        password_hash=hash_password(input.password)
-    )
-    
-    doc = admin.model_dump()
-    doc['createdAt'] = doc['createdAt'].isoformat()
-    await db.admins.insert_one(doc)
-    
-    token = create_jwt_token({"id": admin.id, "username": admin.username, "role": admin.role})
-    
-    return TokenResponse(
-        access_token=token,
-        user={"id": admin.id, "username": admin.username, "email": admin.email, "role": admin.role}
-    )
-
-@api_router.post("/auth/login", response_model=TokenResponse)
-async def login_admin(input: AdminLogin):
-    """Login as admin"""
-    admin = await db.admins.find_one({"username": input.username}, {"_id": 0})
-    if not admin:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    if not verify_password(input.password, admin["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    token = create_jwt_token({"id": admin["id"], "username": admin["username"], "role": admin["role"]})
-    
-    return TokenResponse(
-        access_token=token,
-        user={"id": admin["id"], "username": admin["username"], "email": admin["email"], "role": admin["role"]}
-    )
+@api_router.post("/auth/session")
+async def process_session(input: SessionRequest, response: Response):
+    """
+    Process session_id from Emergent Auth to get user data and create session.
+    Called after Google OAuth redirect with session_id in URL fragment.
+    """
+    try:
+        # Call Emergent Auth API to get user data
+        async with httpx.AsyncClient() as client_http:
+            auth_response = await client_http.get(
+                EMERGENT_AUTH_URL,
+                headers={"X-Session-ID": input.session_id},
+                timeout=30.0
+            )
+        
+        if auth_response.status_code != 200:
+            raise HTTPException(status_code=401, detail="Invalid session ID")
+        
+        auth_data = auth_response.json()
+        email = auth_data.get("email")
+        name = auth_data.get("name")
+        picture = auth_data.get("picture")
+        session_token = auth_data.get("session_token")
+        
+        if not email or not session_token:
+            raise HTTPException(status_code=400, detail="Invalid auth response")
+        
+        # Check if user exists by email
+        existing_user = await db.users.find_one({"email": email}, {"_id": 0})
+        
+        if existing_user:
+            # Update existing user if needed
+            user_id = existing_user["user_id"]
+            await db.users.update_one(
+                {"user_id": user_id},
+                {"$set": {
+                    "name": name,
+                    "picture": picture,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }}
+            )
+        else:
+            # Create new user
+            user_id = f"user_{uuid.uuid4().hex[:12]}"
+            new_user = {
+                "user_id": user_id,
+                "email": email,
+                "name": name,
+                "picture": picture,
+                "role": "admin",  # First user or default role
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.users.insert_one(new_user)
+        
+        # Create session
+        expires_at = datetime.now(timezone.utc) + timedelta(days=SESSION_EXPIRY_DAYS)
+        session_doc = {
+            "user_id": user_id,
+            "session_token": session_token,
+            "expires_at": expires_at.isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        # Remove any existing sessions for this user
+        await db.user_sessions.delete_many({"user_id": user_id})
+        await db.user_sessions.insert_one(session_doc)
+        
+        # Set httpOnly cookie
+        response.set_cookie(
+            key="session_token",
+            value=session_token,
+            httponly=True,
+            secure=True,
+            samesite="none",
+            max_age=SESSION_EXPIRY_DAYS * 24 * 60 * 60,
+            path="/"
+        )
+        
+        # Get updated user data
+        user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+        
+        return {
+            "success": True,
+            "user": user_doc
+        }
+        
+    except httpx.RequestError as e:
+        logger.error(f"Auth request failed: {e}")
+        raise HTTPException(status_code=500, detail="Authentication service unavailable")
 
 @api_router.get("/auth/me")
-async def get_current_admin(user: dict = Depends(require_admin)):
-    """Get current admin user info"""
-    admin = await db.admins.find_one({"id": user["sub"]}, {"_id": 0, "password_hash": 0})
-    if not admin:
-        raise HTTPException(status_code=404, detail="User not found")
-    return admin
+async def get_current_user_info(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None)
+):
+    """Get current user info - validates session and returns user data"""
+    user = await get_current_user(request, session_token, authorization)
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    return user
+
+@api_router.post("/auth/logout")
+async def logout(
+    response: Response,
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None)
+):
+    """Logout - delete session and clear cookie"""
+    token = await get_session_token_from_request(request, session_token, authorization)
+    
+    if token:
+        # Delete session from database
+        await db.user_sessions.delete_many({"session_token": token})
+    
+    # Clear cookie
+    response.delete_cookie(
+        key="session_token",
+        path="/",
+        secure=True,
+        samesite="none"
+    )
+    
+    return {"success": True, "message": "Logged out"}
 
 # ============== WooCommerce Integration Endpoints ==============
 
