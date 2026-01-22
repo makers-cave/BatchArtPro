@@ -79,6 +79,11 @@ function AppRouter() {
           </ProtectedRoute>
         } 
       />
+      {/* Public editor - no authentication required */}
+      <Route 
+        path="/editor/public" 
+        element={<TemplateEditor />} 
+      />
       {/* Default route - shows editor if WooCommerce session, otherwise redirects */}
       <Route 
         path="/" 
