@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useEditor } from '../../context/EditorContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Checkbox } from '../ui/checkbox';
@@ -13,6 +14,8 @@ import {
   Sun,
   Moon,
   FileDown,
+  ShoppingCart,
+  ArrowLeft,
 } from 'lucide-react';
 import {
   Dialog,
@@ -24,13 +27,17 @@ import {
 import { toast } from 'sonner';
 import { templatesApi } from '../../lib/api';
 
-export const Toolbar = ({ onSave, onExport }) => {
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+
+export const Toolbar = ({ onSave, onExport, onAddToCart, canvasRef }) => {
   const { state, actions } = useEditor();
   const { theme, toggleTheme } = useTheme();
+  const { isCustomerMode, wcSession, isAdminMode } = useAuth();
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState('png');
   const [isExporting, setIsExporting] = useState(false);
   const [separateHandwriting, setSeparateHandwriting] = useState(false);
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
 
   // Check if template has any handwriting elements
   const hasHandwriting = state.template.elements.some(el => el.type === 'handwriting' && el.content);
