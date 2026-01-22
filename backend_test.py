@@ -8,7 +8,7 @@ import io
 import os
 
 class TemplateEditorAPITester:
-    def __init__(self, base_url="https://design-merger.preview.emergentagent.com"):
+    def __init__(self, base_url="https://reactplate.preview.emergentagent.com"):
         self.base_url = base_url
         self.tests_run = 0
         self.tests_passed = 0
