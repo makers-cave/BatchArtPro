@@ -597,6 +597,19 @@ export const TemplateEditor = ({ onBack }) => {
       {/* Main Tabs */}
       <div className="border-b bg-card/80 backdrop-blur-xl">
         <div className="flex items-center px-4">
+          {/* Back button for admin mode */}
+          {onBack && isAdminMode && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={onBack}
+              className="mr-2"
+              data-testid="back-to-dashboard-btn"
+            >
+              <ArrowLeft className="w-4 h-4 mr-1" />
+              Dashboard
+            </Button>
+          )}
           <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="flex-1">
             <TabsList className="bg-transparent border-0 h-12">
               <TabsTrigger 
