@@ -606,9 +606,12 @@ async def get_all_designs(
     status: Optional[str] = None,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, le=100),
-    user: dict = Depends(require_admin)
+    request: Request = None,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None)
 ):
     """Get all customer designs (admin only)"""
+    user = await require_admin(request, session_token, authorization)
     query = {}
     if status:
         query["status"] = status
