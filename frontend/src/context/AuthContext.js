@@ -14,38 +14,34 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('admin_token'));
   const [loading, setLoading] = useState(true);
   const [wcSession, setWcSession] = useState(null);
 
   // Check if opened from WooCommerce
   const isCustomerMode = !!wcSession;
   const isAdminMode = !!user && !wcSession;
+  const isAuthenticated = !!user;
 
-  // Load user on mount
+  // Check auth status on mount
   useEffect(() => {
-    const loadUser = async () => {
-      if (token) {
-        try {
-          const response = await fetch(`${BACKEND_URL}/api/auth/me`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (response.ok) {
-            const userData = await response.json();
-            setUser(userData);
-          } else {
-            localStorage.removeItem('admin_token');
-            setToken(null);
-          }
-        } catch (error) {
-          console.error('Auth check failed:', error);
+    const checkAuth = async () => {
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/auth/me`, {
+          credentials: 'include'
+        });
+        if (response.ok) {
+          const userData = await response.json();
+          setUser(userData);
         }
+      } catch (error) {
+        console.error('Auth check failed:', error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
-    loadUser();
-  }, [token]);
+    checkAuth();
+  }, []);
 
   // Check for WooCommerce session token in URL
   useEffect(() => {
@@ -71,47 +67,43 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (username, password) => {
-    const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
+  // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+  const initiateGoogleLogin = useCallback(() => {
+    const redirectUrl = window.location.origin + '/dashboard';
+    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+  }, []);
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Login failed');
+  const processSessionId = async (sessionId) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/auth/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId }),
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to process session');
+      }
+
+      const data = await response.json();
+      setUser(data.user);
+      return data.user;
+    } catch (error) {
+      console.error('Session processing failed:', error);
+      throw error;
     }
-
-    const data = await response.json();
-    localStorage.setItem('admin_token', data.access_token);
-    setToken(data.access_token);
-    setUser(data.user);
-    return data.user;
   };
 
-  const register = async (username, email, password) => {
-    const response = await fetch(`${BACKEND_URL}/api/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, email, password })
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Registration failed');
+  const logout = useCallback(async () => {
+    try {
+      await fetch(`${BACKEND_URL}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
     }
-
-    const data = await response.json();
-    localStorage.setItem('admin_token', data.access_token);
-    setToken(data.access_token);
-    setUser(data.user);
-    return data.user;
-  };
-
-  const logout = useCallback(() => {
-    localStorage.removeItem('admin_token');
-    setToken(null);
     setUser(null);
   }, []);
 
@@ -125,14 +117,13 @@ export const AuthProvider = ({ children }) => {
 
   const value = {
     user,
-    token,
     loading,
     wcSession,
     isCustomerMode,
     isAdminMode,
-    isAuthenticated: !!user,
-    login,
-    register,
+    isAuthenticated,
+    initiateGoogleLogin,
+    processSessionId,
     logout,
     clearWcSession,
   };
