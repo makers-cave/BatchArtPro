@@ -52,7 +52,7 @@ const statusConfig = {
 };
 
 export const AdminDashboard = ({ onOpenEditor }) => {
-  const { user, token, logout } = useAuth();
+  const { user, logout } = useAuth();
   const [designs, setDesigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -72,7 +72,7 @@ export const AdminDashboard = ({ onOpenEditor }) => {
       }
 
       const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` }
+        credentials: 'include'
       });
 
       if (response.ok) {
