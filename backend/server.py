@@ -1,5 +1,6 @@
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Query
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Query, Depends, Header
 from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -9,11 +10,14 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any, Union
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import json
 import io
 import base64
 import pandas as pd
+import hashlib
+import hmac
+import jwt
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -29,6 +33,24 @@ app = FastAPI()
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+# Security
+security = HTTPBearer(auto_error=False)
+
+# JWT Configuration
+JWT_SECRET = os.environ.get('JWT_SECRET', 'your-super-secret-key-change-in-production')
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24
+
+# WooCommerce Configuration
+WOOCOMMERCE_URL = os.environ.get('WOOCOMMERCE_URL', '')
+WOOCOMMERCE_CONSUMER_KEY = os.environ.get('WOOCOMMERCE_CONSUMER_KEY', '')
+WOOCOMMERCE_CONSUMER_SECRET = os.environ.get('WOOCOMMERCE_CONSUMER_SECRET', '')
+WOOCOMMERCE_WEBHOOK_SECRET = os.environ.get('WOOCOMMERCE_WEBHOOK_SECRET', '')
+
+# Upload directory for design files
+UPLOAD_DIR = ROOT_DIR / 'uploads'
+UPLOAD_DIR.mkdir(exist_ok=True)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -36,7 +58,89 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ============== Models ==============
+# ============== Auth Models ==============
+
+class AdminUser(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    username: str
+    email: str
+    password_hash: str
+    role: str = "admin"
+    createdAt: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class AdminLogin(BaseModel):
+    username: str
+    password: str
+
+class AdminCreate(BaseModel):
+    username: str
+    email: str
+    password: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: Dict[str, Any]
+
+# ============== WooCommerce Integration Models ==============
+
+class WooCommerceSession(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    session_token: str
+    product_id: str
+    product_name: Optional[str] = None
+    template_size: Optional[Dict[str, int]] = None  # {width, height}
+    card_id: Optional[str] = None
+    customer_id: Optional[str] = None
+    customer_email: Optional[str] = None
+    wc_cart_key: Optional[str] = None
+    return_url: Optional[str] = None
+    createdAt: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    expiresAt: datetime = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(hours=24))
+
+class WooSessionCreate(BaseModel):
+    product_id: str
+    product_name: Optional[str] = None
+    template_width: Optional[int] = 1080
+    template_height: Optional[int] = 1080
+    card_id: Optional[str] = None
+    customer_id: Optional[str] = None
+    customer_email: Optional[str] = None
+    return_url: Optional[str] = None
+
+class CustomerDesign(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    session_id: str
+    product_id: str
+    product_name: Optional[str] = None
+    customer_id: Optional[str] = None
+    customer_email: Optional[str] = None
+    template_data: Dict[str, Any]  # Full template JSON
+    data_source: Optional[Dict[str, Any]] = None  # Data integration if any
+    thumbnail_path: Optional[str] = None
+    thumbnail_base64: Optional[str] = None
+    status: str = "pending"  # pending, added_to_cart, ordered, exported
+    wc_order_id: Optional[str] = None
+    wc_order_item_id: Optional[str] = None
+    exported: bool = False
+    exportedAt: Optional[datetime] = None
+    exportedBy: Optional[str] = None
+    createdAt: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updatedAt: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class AddToCartRequest(BaseModel):
+    session_token: str
+    template_data: Dict[str, Any]
+    data_source: Optional[Dict[str, Any]] = None
+    thumbnail_base64: Optional[str] = None
+
+# ============== Element Models ==============
 
 class ElementStyle(BaseModel):
     fill: Optional[str] = "#ffffff"
@@ -59,7 +163,7 @@ class TextStyle(BaseModel):
 
 class TemplateElement(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    type: str  # text, rectangle, circle, line, image, qrcode, barcode, rating
+    type: str
     name: str
     x: float = 0
     y: float = 0
@@ -73,9 +177,9 @@ class TemplateElement(BaseModel):
     zIndex: int = 0
     style: ElementStyle = Field(default_factory=ElementStyle)
     textStyle: Optional[TextStyle] = None
-    content: Optional[str] = None  # For text, image URL, QR data
-    dataField: Optional[str] = None  # For data binding
-    extraProps: Optional[Dict[str, Any]] = None  # For element-specific properties
+    content: Optional[str] = None
+    dataField: Optional[str] = None
+    extraProps: Optional[Dict[str, Any]] = None
 
 class TemplateSettings(BaseModel):
     width: int = 1080
@@ -113,7 +217,7 @@ class DataSource(BaseModel):
     
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
-    type: str  # file, api
+    type: str
     config: Dict[str, Any] = {}
     data: Optional[List[Dict[str, Any]]] = None
     columns: Optional[List[str]] = None
@@ -126,9 +230,9 @@ class DataSourceCreate(BaseModel):
 
 class ExportRequest(BaseModel):
     templateId: str
-    format: str  # png, svg, pdf, jpeg
+    format: str
     dataSourceId: Optional[str] = None
-    rowIndices: Optional[List[int]] = None  # Which rows to export, None = all
+    rowIndices: Optional[List[int]] = None
 
 class HistoryEntry(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -139,6 +243,394 @@ class HistoryEntry(BaseModel):
     snapshot: Dict[str, Any]
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+# ============== Auth Helper Functions ==============
+
+def hash_password(password: str) -> str:
+    """Hash a password using SHA256"""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_password(password: str, password_hash: str) -> bool:
+    """Verify a password against its hash"""
+    return hash_password(password) == password_hash
+
+def create_jwt_token(user_data: dict) -> str:
+    """Create a JWT token for a user"""
+    payload = {
+        "sub": user_data["id"],
+        "username": user_data["username"],
+        "role": user_data["role"],
+        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+def decode_jwt_token(token: str) -> Optional[dict]:
+    """Decode and verify a JWT token"""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Optional[dict]:
+    """Get current user from JWT token"""
+    if not credentials:
+        return None
+    
+    payload = decode_jwt_token(credentials.credentials)
+    if not payload:
+        return None
+    
+    return payload
+
+async def require_admin(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    """Require admin authentication"""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    payload = decode_jwt_token(credentials.credentials)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    if payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    return payload
+
+# ============== Auth Endpoints ==============
+
+@api_router.post("/auth/register", response_model=TokenResponse)
+async def register_admin(input: AdminCreate):
+    """Register a new admin user (first user only, or requires existing admin)"""
+    # Check if any admin exists
+    existing_admin = await db.admins.find_one({})
+    if existing_admin:
+        raise HTTPException(status_code=403, detail="Admin registration closed. Contact existing admin.")
+    
+    # Check if username exists
+    if await db.admins.find_one({"username": input.username}):
+        raise HTTPException(status_code=400, detail="Username already exists")
+    
+    # Create admin user
+    admin = AdminUser(
+        username=input.username,
+        email=input.email,
+        password_hash=hash_password(input.password)
+    )
+    
+    doc = admin.model_dump()
+    doc['createdAt'] = doc['createdAt'].isoformat()
+    await db.admins.insert_one(doc)
+    
+    token = create_jwt_token({"id": admin.id, "username": admin.username, "role": admin.role})
+    
+    return TokenResponse(
+        access_token=token,
+        user={"id": admin.id, "username": admin.username, "email": admin.email, "role": admin.role}
+    )
+
+@api_router.post("/auth/login", response_model=TokenResponse)
+async def login_admin(input: AdminLogin):
+    """Login as admin"""
+    admin = await db.admins.find_one({"username": input.username}, {"_id": 0})
+    if not admin:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    if not verify_password(input.password, admin["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    token = create_jwt_token({"id": admin["id"], "username": admin["username"], "role": admin["role"]})
+    
+    return TokenResponse(
+        access_token=token,
+        user={"id": admin["id"], "username": admin["username"], "email": admin["email"], "role": admin["role"]}
+    )
+
+@api_router.get("/auth/me")
+async def get_current_admin(user: dict = Depends(require_admin)):
+    """Get current admin user info"""
+    admin = await db.admins.find_one({"id": user["sub"]}, {"_id": 0, "password_hash": 0})
+    if not admin:
+        raise HTTPException(status_code=404, detail="User not found")
+    return admin
+
+# ============== WooCommerce Integration Endpoints ==============
+
+@api_router.post("/woocommerce/create-session")
+async def create_woocommerce_session(input: WooSessionCreate):
+    """Create a new editing session from WooCommerce"""
+    session_token = str(uuid.uuid4())
+    
+    session = WooCommerceSession(
+        session_token=session_token,
+        product_id=input.product_id,
+        product_name=input.product_name,
+        template_size={"width": input.template_width, "height": input.template_height},
+        card_id=input.card_id,
+        customer_id=input.customer_id,
+        customer_email=input.customer_email,
+        return_url=input.return_url
+    )
+    
+    doc = session.model_dump()
+    doc['createdAt'] = doc['createdAt'].isoformat()
+    doc['expiresAt'] = doc['expiresAt'].isoformat()
+    
+    await db.wc_sessions.insert_one(doc)
+    
+    return {
+        "session_token": session_token,
+        "session_id": session.id,
+        "editor_url": f"/editor?session={session_token}",
+        "expires_at": session.expiresAt.isoformat()
+    }
+
+@api_router.get("/woocommerce/session/{session_token}")
+async def get_woocommerce_session(session_token: str):
+    """Get session details by token"""
+    session = await db.wc_sessions.find_one({"session_token": session_token}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    
+    # Check expiration
+    expires_at = datetime.fromisoformat(session['expiresAt']) if isinstance(session['expiresAt'], str) else session['expiresAt']
+    if expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=410, detail="Session expired")
+    
+    return session
+
+@api_router.post("/woocommerce/add-to-cart")
+async def add_to_cart(input: AddToCartRequest):
+    """Save design and add to WooCommerce cart"""
+    # Get session
+    session = await db.wc_sessions.find_one({"session_token": input.session_token}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Check expiration
+    expires_at = datetime.fromisoformat(session['expiresAt']) if isinstance(session['expiresAt'], str) else session['expiresAt']
+    if expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=410, detail="Session expired")
+    
+    # Save thumbnail if provided
+    thumbnail_path = None
+    if input.thumbnail_base64:
+        try:
+            # Decode and save thumbnail
+            img_data = base64.b64decode(input.thumbnail_base64.split(',')[1] if ',' in input.thumbnail_base64 else input.thumbnail_base64)
+            thumbnail_filename = f"{session['id']}_{uuid.uuid4()}.png"
+            thumbnail_path = str(UPLOAD_DIR / thumbnail_filename)
+            with open(thumbnail_path, 'wb') as f:
+                f.write(img_data)
+        except Exception as e:
+            logger.error(f"Failed to save thumbnail: {e}")
+    
+    # Create customer design record
+    design = CustomerDesign(
+        session_id=session['id'],
+        product_id=session['product_id'],
+        product_name=session.get('product_name'),
+        customer_id=session.get('customer_id'),
+        customer_email=session.get('customer_email'),
+        template_data=input.template_data,
+        data_source=input.data_source,
+        thumbnail_path=thumbnail_path,
+        thumbnail_base64=input.thumbnail_base64[:100] + "..." if input.thumbnail_base64 and len(input.thumbnail_base64) > 100 else input.thumbnail_base64,
+        status="added_to_cart"
+    )
+    
+    doc = design.model_dump()
+    doc['createdAt'] = doc['createdAt'].isoformat()
+    doc['updatedAt'] = doc['updatedAt'].isoformat()
+    
+    await db.customer_designs.insert_one(doc)
+    
+    # Call WooCommerce API to add to cart (if configured)
+    wc_response = None
+    if WOOCOMMERCE_URL and WOOCOMMERCE_CONSUMER_KEY:
+        try:
+            import requests
+            wc_response = requests.post(
+                f"{WOOCOMMERCE_URL}/wp-json/wc/store/v1/cart/add-item",
+                json={
+                    "id": int(session['product_id']),
+                    "quantity": 1,
+                    "meta_data": [
+                        {"key": "design_id", "value": design.id},
+                        {"key": "customized", "value": "yes"}
+                    ]
+                },
+                headers={
+                    "Content-Type": "application/json"
+                },
+                auth=(WOOCOMMERCE_CONSUMER_KEY, WOOCOMMERCE_CONSUMER_SECRET),
+                timeout=30
+            )
+            wc_response = wc_response.json()
+        except Exception as e:
+            logger.error(f"WooCommerce API error: {e}")
+    
+    return {
+        "success": True,
+        "design_id": design.id,
+        "message": "Design saved and added to cart",
+        "thumbnail_url": f"/api/designs/{design.id}/thumbnail" if thumbnail_path else None,
+        "return_url": session.get('return_url'),
+        "woocommerce_response": wc_response
+    }
+
+@api_router.post("/woocommerce/webhook/order-created")
+async def handle_order_created(
+    payload: Dict[str, Any],
+    x_wc_webhook_signature: Optional[str] = Header(None)
+):
+    """Handle WooCommerce order created webhook"""
+    # Verify webhook signature if secret is configured
+    if WOOCOMMERCE_WEBHOOK_SECRET and x_wc_webhook_signature:
+        # WooCommerce uses HMAC-SHA256
+        expected_sig = base64.b64encode(
+            hmac.new(
+                WOOCOMMERCE_WEBHOOK_SECRET.encode(),
+                json.dumps(payload).encode(),
+                hashlib.sha256
+            ).digest()
+        ).decode()
+        
+        if not hmac.compare_digest(expected_sig, x_wc_webhook_signature):
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    
+    # Extract order info
+    order_id = payload.get('id')
+    line_items = payload.get('line_items', [])
+    
+    # Update customer designs with order ID
+    for item in line_items:
+        meta_data = item.get('meta_data', [])
+        for meta in meta_data:
+            if meta.get('key') == 'design_id':
+                design_id = meta.get('value')
+                await db.customer_designs.update_one(
+                    {"id": design_id},
+                    {
+                        "$set": {
+                            "status": "ordered",
+                            "wc_order_id": str(order_id),
+                            "wc_order_item_id": str(item.get('id')),
+                            "updatedAt": datetime.now(timezone.utc).isoformat()
+                        }
+                    }
+                )
+    
+    return {"status": "ok"}
+
+# ============== Admin Design Management Endpoints ==============
+
+@api_router.get("/admin/designs")
+async def get_all_designs(
+    status: Optional[str] = None,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, le=100),
+    user: dict = Depends(require_admin)
+):
+    """Get all customer designs (admin only)"""
+    query = {}
+    if status:
+        query["status"] = status
+    
+    skip = (page - 1) * limit
+    
+    designs = await db.customer_designs.find(query, {"_id": 0}).sort("createdAt", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.customer_designs.count_documents(query)
+    
+    return {
+        "designs": designs,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": (total + limit - 1) // limit
+    }
+
+@api_router.get("/admin/designs/{design_id}")
+async def get_design_detail(design_id: str, user: dict = Depends(require_admin)):
+    """Get design details (admin only)"""
+    design = await db.customer_designs.find_one({"id": design_id}, {"_id": 0})
+    if not design:
+        raise HTTPException(status_code=404, detail="Design not found")
+    return design
+
+@api_router.get("/admin/designs/{design_id}/export")
+async def export_design(
+    design_id: str,
+    format: str = Query(default="png"),
+    user: dict = Depends(require_admin)
+):
+    """Export a customer design (admin only)"""
+    design = await db.customer_designs.find_one({"id": design_id}, {"_id": 0})
+    if not design:
+        raise HTTPException(status_code=404, detail="Design not found")
+    
+    # Mark as exported
+    await db.customer_designs.update_one(
+        {"id": design_id},
+        {
+            "$set": {
+                "exported": True,
+                "exportedAt": datetime.now(timezone.utc).isoformat(),
+                "exportedBy": user["username"],
+                "updatedAt": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    # Return template data for client-side export
+    return {
+        "design_id": design_id,
+        "template": design["template_data"],
+        "data_source": design.get("data_source"),
+        "format": format,
+        "product_id": design.get("product_id"),
+        "order_id": design.get("wc_order_id")
+    }
+
+@api_router.post("/admin/designs/{design_id}/mark-exported")
+async def mark_design_exported(design_id: str, user: dict = Depends(require_admin)):
+    """Mark a design as exported"""
+    result = await db.customer_designs.update_one(
+        {"id": design_id},
+        {
+            "$set": {
+                "exported": True,
+                "exportedAt": datetime.now(timezone.utc).isoformat(),
+                "exportedBy": user["username"],
+                "status": "exported",
+                "updatedAt": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Design not found")
+    
+    return {"success": True, "message": "Design marked as exported"}
+
+@api_router.get("/designs/{design_id}/thumbnail")
+async def get_design_thumbnail(design_id: str):
+    """Get design thumbnail image"""
+    design = await db.customer_designs.find_one({"id": design_id}, {"_id": 0, "thumbnail_path": 1})
+    if not design or not design.get("thumbnail_path"):
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+    
+    thumbnail_path = Path(design["thumbnail_path"])
+    if not thumbnail_path.exists():
+        raise HTTPException(status_code=404, detail="Thumbnail file not found")
+    
+    return StreamingResponse(
+        open(thumbnail_path, "rb"),
+        media_type="image/png",
+        headers={"Content-Disposition": f"inline; filename={design_id}.png"}
+    )
+
 # ============== Template Endpoints ==============
 
 @api_router.get("/")
@@ -146,7 +638,7 @@ async def root():
     return {"message": "Template Editor API"}
 
 @api_router.post("/templates", response_model=Template)
-async def create_template(input: TemplateCreate):
+async def create_template(input: TemplateCreate, user: dict = Depends(require_admin)):
     template = Template(
         name=input.name,
         description=input.description,
@@ -200,7 +692,7 @@ async def update_template(template_id: str, input: TemplateUpdate):
     return updated
 
 @api_router.delete("/templates/{template_id}")
-async def delete_template(template_id: str):
+async def delete_template(template_id: str, user: dict = Depends(require_admin)):
     result = await db.templates.delete_one({"id": template_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -265,11 +757,9 @@ async def upload_data_file(file: UploadFile = File(...)):
         else:
             raise HTTPException(status_code=400, detail="Unsupported file format")
         
-        # Convert to list of dicts
         records = df.fillna('').to_dict('records')
         columns = list(df.columns)
         
-        # Create datasource
         datasource = DataSource(
             name=file.filename,
             type="file",
@@ -288,7 +778,7 @@ async def upload_data_file(file: UploadFile = File(...)):
             "name": datasource.name,
             "columns": columns,
             "rowCount": len(records),
-            "preview": records[:5]  # First 5 rows preview
+            "preview": records[:5]
         }
     except Exception as e:
         logger.error(f"File upload error: {e}")
@@ -316,7 +806,6 @@ async def fetch_api_data(config: Dict[str, Any]):
         if isinstance(data, list):
             records = data
         elif isinstance(data, dict):
-            # Try to find array in response
             for key, value in data.items():
                 if isinstance(value, list) and len(value) > 0:
                     records = value
@@ -357,7 +846,7 @@ async def fetch_api_data(config: Dict[str, Any]):
 
 @api_router.post("/export")
 async def export_template(request: ExportRequest):
-    """Generate export data for template (actual rendering happens on frontend)"""
+    """Generate export data for template"""
     template = await db.templates.find_one({"id": request.templateId}, {"_id": 0})
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -375,7 +864,7 @@ async def export_template(request: ExportRequest):
     return {
         "template": template,
         "format": request.format,
-        "dataRows": data_rows if data_rows else [{}],  # At least one empty row for single export
+        "dataRows": data_rows if data_rows else [{}],
         "totalPages": len(data_rows) if data_rows else 1
     }
 
@@ -383,7 +872,6 @@ async def export_template(request: ExportRequest):
 
 @api_router.post("/history")
 async def save_history(templateId: str, action: str, snapshot: Dict[str, Any]):
-    """Save a history entry for undo/redo"""
     entry = HistoryEntry(
         templateId=templateId,
         action=action,
@@ -394,7 +882,6 @@ async def save_history(templateId: str, action: str, snapshot: Dict[str, Any]):
     
     await db.history.insert_one(doc)
     
-    # Keep only last 50 history entries per template
     count = await db.history.count_documents({"templateId": templateId})
     if count > 50:
         oldest = await db.history.find({"templateId": templateId}).sort("timestamp", 1).limit(count - 50).to_list(count - 50)
@@ -405,7 +892,6 @@ async def save_history(templateId: str, action: str, snapshot: Dict[str, Any]):
 
 @api_router.get("/history/{template_id}")
 async def get_history(template_id: str, limit: int = Query(default=50, le=100)):
-    """Get history entries for a template"""
     entries = await db.history.find(
         {"templateId": template_id}, 
         {"_id": 0}
@@ -419,7 +905,6 @@ async def get_history(template_id: str, limit: int = Query(default=50, le=100)):
 
 @api_router.delete("/history/{template_id}")
 async def clear_history(template_id: str):
-    """Clear all history for a template"""
     await db.history.delete_many({"templateId": template_id})
     return {"message": "History cleared"}
 
@@ -427,12 +912,10 @@ async def clear_history(template_id: str):
 
 @api_router.get("/templates/{template_id}/download")
 async def download_template(template_id: str):
-    """Download template as JSON file"""
     template = await db.templates.find_one({"id": template_id}, {"_id": 0})
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     
-    # Convert datetime to string for JSON
     if isinstance(template.get('createdAt'), datetime):
         template['createdAt'] = template['createdAt'].isoformat()
     if isinstance(template.get('updatedAt'), datetime):
@@ -448,12 +931,10 @@ async def download_template(template_id: str):
 
 @api_router.post("/templates/import")
 async def import_template(file: UploadFile = File(...)):
-    """Import a template from JSON file"""
     try:
         content = await file.read()
         template_data = json.loads(content.decode('utf-8'))
         
-        # Generate new ID and timestamps
         template_data['id'] = str(uuid.uuid4())
         template_data['createdAt'] = datetime.now(timezone.utc).isoformat()
         template_data['updatedAt'] = datetime.now(timezone.utc).isoformat()
@@ -474,8 +955,8 @@ async def import_template(file: UploadFile = File(...)):
 
 class HandwritingRequest(BaseModel):
     text: str
-    style: Optional[int] = 9  # 0-11
-    bias: Optional[float] = 0.75  # 0-1, higher = neater
+    style: Optional[int] = 9
+    bias: Optional[float] = 0.75
     color: Optional[str] = "black"
     strokeWidth: Optional[int] = 2
 
