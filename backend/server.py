@@ -791,7 +791,13 @@ async def update_template(template_id: str, input: TemplateUpdate):
     return updated
 
 @api_router.delete("/templates/{template_id}")
-async def delete_template(template_id: str, user: dict = Depends(require_admin)):
+async def delete_template(
+    template_id: str,
+    request: Request = None,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None)
+):
+    user = await require_admin(request, session_token, authorization)
     result = await db.templates.delete_one({"id": template_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Template not found")
