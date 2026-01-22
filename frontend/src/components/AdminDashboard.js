@@ -96,7 +96,7 @@ export const AdminDashboard = ({ onOpenEditor }) => {
   const handleViewDetails = async (designId) => {
     try {
       const response = await fetch(`${BACKEND_URL}/api/admin/designs/${designId}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        credentials: 'include'
       });
 
       if (response.ok) {
