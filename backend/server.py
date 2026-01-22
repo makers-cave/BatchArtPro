@@ -681,15 +681,21 @@ async def export_design(
     }
 
 @api_router.post("/admin/designs/{design_id}/mark-exported")
-async def mark_design_exported(design_id: str, user: dict = Depends(require_admin)):
+async def mark_design_exported(
+    design_id: str,
+    request: Request = None,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None)
+):
     """Mark a design as exported"""
+    user = await require_admin(request, session_token, authorization)
     result = await db.customer_designs.update_one(
         {"id": design_id},
         {
             "$set": {
                 "exported": True,
                 "exportedAt": datetime.now(timezone.utc).isoformat(),
-                "exportedBy": user["username"],
+                "exportedBy": user.get("name", "admin"),
                 "status": "exported",
                 "updatedAt": datetime.now(timezone.utc).isoformat()
             }
