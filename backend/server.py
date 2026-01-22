@@ -630,8 +630,14 @@ async def get_all_designs(
     }
 
 @api_router.get("/admin/designs/{design_id}")
-async def get_design_detail(design_id: str, user: dict = Depends(require_admin)):
+async def get_design_detail(
+    design_id: str,
+    request: Request = None,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None)
+):
     """Get design details (admin only)"""
+    user = await require_admin(request, session_token, authorization)
     design = await db.customer_designs.find_one({"id": design_id}, {"_id": 0})
     if not design:
         raise HTTPException(status_code=404, detail="Design not found")
