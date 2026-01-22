@@ -167,13 +167,22 @@ export const AdminDashboard = ({ onOpenEditor }) => {
             <h1 className="text-xl font-bold">Admin Dashboard</h1>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">
-              Welcome, <strong>{user?.username}</strong>
-            </span>
-            <Button variant="outline" size="sm" onClick={() => onOpenEditor?.()}>
+            <div className="flex items-center gap-2">
+              {user?.picture && (
+                <img 
+                  src={user.picture} 
+                  alt={user.name} 
+                  className="w-8 h-8 rounded-full"
+                />
+              )}
+              <span className="text-sm text-muted-foreground">
+                Welcome, <strong>{user?.name || user?.email}</strong>
+              </span>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => onOpenEditor?.()} data-testid="open-editor-btn">
               Open Editor
             </Button>
-            <Button variant="ghost" size="sm" onClick={logout}>
+            <Button variant="ghost" size="sm" onClick={logout} data-testid="logout-btn">
               <LogOut className="w-4 h-4 mr-2" />
               Logout
             </Button>
