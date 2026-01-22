@@ -91,6 +91,7 @@ export const AdminDashboard = ({ onOpenEditor }) => {
 
   useEffect(() => {
     loadDesigns();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, statusFilter]);
 
   const handleViewDetails = async (designId) => {
