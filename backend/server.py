@@ -1,6 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Query, Depends, Header
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Query, Depends, Header, Request, Response, Cookie
 from fastapi.responses import StreamingResponse
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -17,7 +16,7 @@ import base64
 import pandas as pd
 import hashlib
 import hmac
-import jwt
+import httpx
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -33,13 +32,9 @@ app = FastAPI()
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
-# Security
-security = HTTPBearer(auto_error=False)
-
-# JWT Configuration
-JWT_SECRET = os.environ.get('JWT_SECRET', 'your-super-secret-key-change-in-production')
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = 24
+# Emergent OAuth Configuration
+EMERGENT_AUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
+SESSION_EXPIRY_DAYS = 7
 
 # WooCommerce Configuration
 WOOCOMMERCE_URL = os.environ.get('WOOCOMMERCE_URL', '')
