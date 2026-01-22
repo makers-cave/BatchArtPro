@@ -664,7 +664,7 @@ async def export_design(
             "$set": {
                 "exported": True,
                 "exportedAt": datetime.now(timezone.utc).isoformat(),
-                "exportedBy": user["username"],
+                "exportedBy": user.get("name", "admin"),
                 "updatedAt": datetime.now(timezone.utc).isoformat()
             }
         }
