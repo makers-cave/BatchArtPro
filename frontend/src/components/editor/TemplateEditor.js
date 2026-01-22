@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useEditor } from '../../context/EditorContext';
+import { useAuth } from '../../context/AuthContext';
 import { Toolbar } from './Toolbar';
 import { Sidebar } from './Sidebar';
 import { Canvas } from './Canvas';
@@ -22,6 +23,7 @@ import {
   FolderOpen,
   FileUp,
   Plus,
+  ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { templatesApi, exportApi } from '../../lib/api';
@@ -29,8 +31,9 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { jsPDF } from 'jspdf';
 
-export const TemplateEditor = () => {
+export const TemplateEditor = ({ onBack }) => {
   const { state, actions } = useEditor();
+  const { isAdminMode } = useAuth();
   const canvasRef = useRef(null);
   const [activeMainTab, setActiveMainTab] = useState('editor');
   const [savedTemplates, setSavedTemplates] = useState([]);
