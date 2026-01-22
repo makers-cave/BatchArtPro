@@ -647,9 +647,12 @@ async def get_design_detail(
 async def export_design(
     design_id: str,
     format: str = Query(default="png"),
-    user: dict = Depends(require_admin)
+    request: Request = None,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None)
 ):
     """Export a customer design (admin only)"""
+    user = await require_admin(request, session_token, authorization)
     design = await db.customer_designs.find_one({"id": design_id}, {"_id": 0})
     if not design:
         raise HTTPException(status_code=404, detail="Design not found")
