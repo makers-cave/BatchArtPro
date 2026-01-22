@@ -80,9 +80,56 @@ export const Toolbar = ({ onSave, onExport, onAddToCart, canvasRef }) => {
     }
   };
 
+  const handleAddToCart = async () => {
+    if (!wcSession) return;
+
+    setIsAddingToCart(true);
+    try {
+      // Generate thumbnail
+      let thumbnailBase64 = null;
+      if (canvasRef?.current) {
+        const html2canvas = (await import('html2canvas')).default;
+        const canvas = await html2canvas(canvasRef.current, {
+          scale: 0.5,
+          backgroundColor: state.template.settings.backgroundColor,
+        });
+        thumbnailBase64 = canvas.toDataURL('image/png', 0.7);
+      }
+
+      const response = await fetch(`${BACKEND_URL}/api/woocommerce/add-to-cart`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_token: wcSession.token,
+          template_data: state.template,
+          data_source: state.dataSource,
+          thumbnail_base64: thumbnailBase64,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to add to cart');
+      }
+
+      const data = await response.json();
+      toast.success('Design added to cart!');
+
+      // Redirect back to WooCommerce if return URL provided
+      if (data.return_url) {
+        window.location.href = data.return_url;
+      } else if (wcSession.return_url) {
+        window.location.href = wcSession.return_url;
+      }
+    } catch (error) {
+      toast.error(error.message || 'Failed to add to cart');
+    } finally {
+      setIsAddingToCart(false);
+    }
+  };
+
   const handleDownloadTemplate = async () => {
     if (!state.template.id) {
-      // Download current state as JSON
       const blob = new Blob([JSON.stringify(state.template, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -116,6 +163,78 @@ export const Toolbar = ({ onSave, onExport, onAddToCart, canvasRef }) => {
     { value: 'pdf', label: 'PDF', description: 'Print-ready document' },
   ];
 
+  // Customer mode - show simplified toolbar with Add to Cart
+  if (isCustomerMode) {
+    return (
+      <div className="h-12 border-b bg-card/50 backdrop-blur-xl flex items-center justify-between px-4" data-testid="toolbar">
+        {/* Left section */}
+        <div className="flex items-center gap-2">
+          {wcSession?.return_url && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => window.location.href = wcSession.return_url}
+              className="h-8 px-2"
+            >
+              <ArrowLeft className="w-4 h-4 mr-1" />
+              Back
+            </Button>
+          )}
+          <div className="w-px h-6 bg-border mx-2" />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleUndo}
+            disabled={!canUndo}
+            className="h-8 px-2"
+          >
+            <Undo2 className="w-4 h-4 mr-1" />
+            Undo
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleRedo}
+            disabled={!canRedo}
+            className="h-8 px-2"
+          >
+            <Redo2 className="w-4 h-4 mr-1" />
+            Redo
+          </Button>
+        </div>
+
+        {/* Center - Product info */}
+        <div className="flex items-center gap-2">
+          {wcSession?.product_name && (
+            <span className="text-sm font-medium">{wcSession.product_name}</span>
+          )}
+        </div>
+
+        {/* Right - Add to Cart button */}
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleAddToCart}
+            disabled={isAddingToCart || state.template.elements.length === 0}
+            className="h-8 px-4 bg-primary"
+            data-testid="add-to-cart-btn"
+          >
+            <ShoppingCart className="w-4 h-4 mr-2" />
+            {isAddingToCart ? 'Adding...' : 'Add to Cart'}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleTheme}
+            className="h-8 w-8 p-0"
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Admin mode - full toolbar
   return (
     <div className="h-12 border-b bg-card/50 backdrop-blur-xl flex items-center justify-between px-4" data-testid="toolbar">
       {/* Left section - Actions */}
